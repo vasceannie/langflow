@@ -30,6 +30,7 @@ from langflow.interface.types import get_and_cache_all_types_dict
 from langflow.interface.utils import setup_llm_caching
 from langflow.logging.logger import configure
 from langflow.services.deps import get_cache_service, get_settings_service, get_telemetry_service
+from langflow.services.task.consumer import task_consumer
 from langflow.services.utils import initialize_services, teardown_services
 
 # Ignore Pydantic deprecation warnings from Langchain
@@ -97,14 +98,23 @@ def get_lifespan(fix_migration=False, socketio_server=None, version=None):
             await create_or_update_starter_projects(task)
             asyncio.create_task(get_telemetry_service().start())
             load_flows_from_directory()
+
+            # Start the task consumer
+            await task_consumer.start()
+
             yield
         except Exception as exc:
             if "langflow migration --fix" not in str(exc):
                 logger.exception(exc)
             raise
-        # Shutdown message
-        rprint("[bold red]Shutting down Langflow...[/bold red]")
-        await teardown_services()
+        finally:
+            # Shutdown message
+            rprint("[bold red]Shutting down Langflow...[/bold red]")
+
+            # Stop the task consumer
+            await task_consumer.stop()
+
+            await teardown_services()
 
     return lifespan
 
