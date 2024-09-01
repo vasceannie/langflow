@@ -98,9 +98,9 @@ def get_lifespan(fix_migration=False, socketio_server=None, version=None):
             await create_or_update_starter_projects(task)
             asyncio.create_task(get_telemetry_service().start())
             load_flows_from_directory()
-
+            logger.info("Starting task consumer")
             # Start the task consumer
-            await task_consumer.start()
+            asyncio.create_task(task_consumer.start())
 
             yield
         except Exception as exc:
