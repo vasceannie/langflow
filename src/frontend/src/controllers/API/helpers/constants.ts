@@ -21,6 +21,7 @@ export const URLs = {
   VALIDATE: `validate`,
   CONFIG: `config`,
   STARTER_PROJECTS: `starter-projects`,
+  TASKS: `tasks`,
 } as const;
 
 export function getURL(key: keyof typeof URLs, params: any = {}) {
