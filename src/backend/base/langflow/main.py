@@ -112,7 +112,7 @@ def get_lifespan(fix_migration=False, socketio_server=None, version=None):
             rprint("[bold red]Shutting down Langflow...[/bold red]")
 
             # Stop the task consumer
-            await task_consumer.stop()
+            # await task_consumer.stop()
 
             await teardown_services()
 
