@@ -143,6 +143,7 @@ import {
   Snowflake,
   Sparkles,
   Square,
+  SquareCheckBig,
   SquarePen,
   StickyNote,
   Store,
@@ -640,4 +641,5 @@ export const nodeIconsLucide: iconsType = {
   TavilyIcon,
   DuckDuckGo: DuckDuckGoIcon,
   OpenSearch,
+  SquareCheckBig,
 };
