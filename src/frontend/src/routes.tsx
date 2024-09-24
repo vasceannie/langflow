@@ -154,6 +154,7 @@ const router = createBrowserRouter(
                     </ProtectedAdminRoute>
                   }
                 />
+                <Route path="tasks" element={<TaskPage />} />
               </Route>
               <Route path="flow/:id/">
                 <Route path="" element={<DashboardWrapperPage />}>
@@ -191,7 +192,6 @@ const router = createBrowserRouter(
               </ProtectedLoginRoute>
             }
           />
-          <Route path="/tasks" element={<TaskPage />} />
         </Route>
       </Route>
       <Route path="*" element={<CustomNavigate replace to="/" />} />
