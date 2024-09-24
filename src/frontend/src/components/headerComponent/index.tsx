@@ -126,6 +126,22 @@ export default function Header(): JSX.Element {
             </Button>
           </CustomLink>
         )}
+
+        {hasStore && (
+          <CustomLink to="/tasks">
+            <Button
+              className="gap-2"
+              variant={
+                location.pathname.includes("/tasks") ? "primary" : "secondary"
+              }
+              size="sm"
+              data-testid="button-tasks-page"
+            >
+              <IconComponent name="SquareCheckBig" className="h-4 w-4" />
+              <div className="hidden flex-1 lg:block">Tasks</div>
+            </Button>
+          </CustomLink>
+        )}
       </div>
       <div className="header-end-division">
         <div className="header-end-display">
