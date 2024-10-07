@@ -18,10 +18,7 @@ from sqlmodel import Session, SQLModel, create_engine, select, text
 from langflow.services.base import Service
 from langflow.services.database import models
 from langflow.services.database.models.user.crud import get_user_by_username
-from langflow.services.database.utils import (
-    Result,
-    TableResults,
-)
+from langflow.services.database.utils import Result, TableResults
 from langflow.services.deps import get_settings_service
 from langflow.services.utils import teardown_superuser
 
@@ -43,6 +40,10 @@ class DatabaseService(Service):
         langflow_dir = Path(__file__).parent.parent.parent
         self.script_location = langflow_dir / "alembic"
         self.alembic_cfg_path = langflow_dir / "alembic.ini"
+        self.engine = self._create_engine()
+
+    def recreate_engine(self):
+        self.engine.dispose()
         self.engine = self._create_engine()
 
     def _create_engine(self) -> Engine:
