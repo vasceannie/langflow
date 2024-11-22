@@ -1,6 +1,7 @@
 import asyncio
 from typing import Any
 from unittest.mock import MagicMock
+from uuid import uuid4
 
 import pytest
 from langflow.custom.custom_component.component import Component
@@ -202,7 +203,7 @@ async def test_component_streaming_message():
     # Create a proper mock vertex with graph and flow_id
     vertex = MagicMock()
     mock_graph = MagicMock()
-    mock_graph.flow_id = "12345678-1234-5678-1234-567812345678"  # Valid UUID string
+    mock_graph.flow_id = uuid4()  # Valid UUID string
     vertex.graph = mock_graph
 
     component = ComponentForTesting(_vertex=vertex)
