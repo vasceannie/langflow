@@ -56,8 +56,16 @@ def get_messages(
         return [Message(**d.model_dump()) for d in messages]
 
 
-def add_messages(messages: Message | list[Message], flow_id: str | None = None):
-    """Add a message to the monitor service."""
+def add_messages(messages: Message | list[Message], flow_id: str | UUID | None = None):
+    """Add messages to the memory.
+
+    Args:
+        messages (Union[Message, List[Message]]): The message(s) to add.
+        flow_id (Optional[str | UUID]): The flow ID associated with the message.
+
+    Returns:
+        List[Message]: A list of data containing the added messages.
+    """
     if not isinstance(messages, list):
         messages = [messages]
 
@@ -67,6 +75,10 @@ def add_messages(messages: Message | list[Message], flow_id: str | None = None):
         raise ValueError(msg)
 
     try:
+        # Convert flow_id to UUID if it's a string
+        if isinstance(flow_id, str):
+            flow_id = UUID(flow_id)
+
         messages_models = [MessageTable.from_message(msg, flow_id=flow_id) for msg in messages]
         with session_scope() as session:
             messages_models = add_messagetables(messages_models, session)
@@ -90,6 +102,8 @@ def update_messages(messages: Message | list[Message]) -> list[Message]:
                     msg = msg.sqlmodel_update(message.data)
                 else:
                     msg = msg.sqlmodel_update(message.model_dump(exclude_unset=True, exclude_none=True))
+                if isinstance(msg.flow_id, str):
+                    msg.flow_id = UUID(msg.flow_id)
                 session.add(msg)
                 session.commit()
                 session.refresh(msg)
@@ -148,13 +162,13 @@ def delete_message(id_: str) -> None:
 
 def store_message(
     message: Message,
-    flow_id: str | None = None,
+    flow_id: str | UUID | None = None,
 ) -> list[Message]:
     """Stores a message in the memory.
 
     Args:
         message (Message): The message to store.
-        flow_id (Optional[str]): The flow ID associated with the message.
+        flow_id (Optional[str | UUID]): The flow ID associated with the message.
             When running from the CustomComponent you can access this using `self.graph.flow_id`.
 
     Returns:
@@ -166,6 +180,10 @@ def store_message(
     if not message:
         logger.warning("No message provided.")
         return []
+
+    # Convert flow_id to UUID if it's a string
+    if isinstance(flow_id, str):
+        flow_id = UUID(flow_id)
 
     required_fields = ["session_id", "sender", "sender_name"]
     missing_fields = [field for field in required_fields if not getattr(message, field)]
