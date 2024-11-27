@@ -1006,10 +1006,10 @@ class Component(CustomComponent):
 
     def send_message(self, message: Message, id_: str | None = None):
         if (hasattr(self, "graph") and self.graph.session_id) and (message is not None and not message.session_id):
-            if isinstance(self.graph.session_id, str):
-                message.session_id = UUID(self.graph.session_id)
-            else:
-                message.session_id = self.graph.session_id
+            session_id = (
+                UUID(self.graph.session_id) if isinstance(self.graph.session_id, str) else self.graph.session_id
+            )
+            message.session_id = session_id
         stored_message = self._store_message(message)
 
         self._stored_message_id = stored_message.id
@@ -1034,15 +1034,14 @@ class Component(CustomComponent):
         return stored_message
 
     def _store_message(self, message: Message) -> Message:
-        flow_id = self.graph.flow_id if hasattr(self, "graph") else None
-        if isinstance(flow_id, str):
-            flow_id = UUID(flow_id)
-        messages = store_message(message, flow_id=flow_id)
-        if len(messages) != 1:
-            msg = "Only one message can be stored at a time."
+        flow_id: str | None = None
+        if hasattr(self, "graph"):
+            flow_id = str(UUID(self.graph.flow_id) if isinstance(self.graph.flow_id, str) else self.graph.flow_id)
+        stored_messages = store_message(message, flow_id=flow_id)
+        if not stored_messages:
+            msg = "Failed to store message"
             raise ValueError(msg)
-
-        return messages[0]
+        return stored_messages[0]
 
     def _send_message_event(self, message: Message, id_: str | None = None, category: str | None = None) -> None:
         if hasattr(self, "_event_manager") and self._event_manager:
@@ -1066,13 +1065,21 @@ class Component(CustomComponent):
             and not isinstance(original_message.text, str)
         )
 
-    def _update_stored_message(self, stored_message: Message) -> Message:
-        message_tables = update_messages(stored_message)
-        if len(message_tables) != 1:
-            msg = "Only one message can be updated at a time."
+    def _update_stored_message(self, message: Message) -> Message:
+        """Update the stored message."""
+        if hasattr(self, "_vertex") and self._vertex is not None and hasattr(self._vertex, "graph"):
+            flow_id = str(
+                UUID(self._vertex.graph.flow_id)
+                if isinstance(self._vertex.graph.flow_id, str)
+                else self._vertex.graph.flow_id
+            )
+            message.flow_id = flow_id
+
+        updated_messages = update_messages(message)
+        if not updated_messages:
+            msg = "Failed to update message"
             raise ValueError(msg)
-        message_table = message_tables[0]
-        return Message(**message_table.model_dump())
+        return updated_messages[0]
 
     def _stream_message(self, iterator: AsyncIterator | Iterator, message: Message) -> str:
         if not isinstance(iterator, AsyncIterator | Iterator):
