@@ -1034,9 +1034,10 @@ class Component(CustomComponent):
         return stored_message
 
     def _store_message(self, message: Message) -> Message:
-        flow_id: str | None = None
+        flow_id: UUID | None = None
         if hasattr(self, "graph"):
-            flow_id = str(UUID(self.graph.flow_id) if isinstance(self.graph.flow_id, str) else self.graph.flow_id)
+            # Convert string to UUID if needed, or use existing UUID
+            flow_id = UUID(self.graph.flow_id) if isinstance(self.graph.flow_id, str) else self.graph.flow_id
         stored_messages = store_message(message, flow_id=flow_id)
         if not stored_messages:
             msg = "Failed to store message"
