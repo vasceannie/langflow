@@ -6,6 +6,8 @@ services:
     pull_policy: always               # set to 'always' when using 'latest' image
     ports:
       - "7860:7860"
+    networks:
+      - secret-lab
     depends_on:
       - postgres
     environment:
@@ -20,11 +22,15 @@ services:
       POSTGRES_USER: langflow
       POSTGRES_PASSWORD: langflow
       POSTGRES_DB: langflow
-    ports:
-      - "5432:5432"
     volumes:
       - langflow-postgres:/var/lib/postgresql/data
+    networks:
+      - secret-lab
 
 volumes:
   langflow-postgres:
   langflow-data:
+
+networks:
+  secret-lab:
+    external: true
