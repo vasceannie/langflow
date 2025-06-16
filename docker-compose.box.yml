@@ -13,7 +13,7 @@ services:
       # This variable defines where the logs, file storage, monitor data and secret keys are stored.
       - LANGFLOW_CONFIG_DIR=app/langflow
     volumes:
-      - /nas/langflow:/app/langflow
+      - /home/langflow/src/backend/base/langflow:/app/langflow
 
   postgres:
     image: postgres:16
