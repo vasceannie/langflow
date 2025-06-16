@@ -1,5 +1,5 @@
 import { expect, Page, test } from "@playwright/test";
-import uaParser from "ua-parser-js";
+import { awaitBootstrapTest } from "../../utils/await-bootstrap-test";
 
 // TODO: This component doesn't have slider needs updating
 test(
@@ -8,35 +8,7 @@ test(
     tag: ["@release", "@workspace"],
   },
   async ({ page }) => {
-    await page.goto("/");
-    await page.waitForSelector('[data-testid="mainpage_title"]', {
-      timeout: 30000,
-    });
-
-    await page.waitForSelector('[id="new-project-btn"]', {
-      timeout: 30000,
-    });
-
-    let modalCount = 0;
-    try {
-      const modalTitleElement = await page?.getByTestId("modal-title");
-      if (modalTitleElement) {
-        modalCount = await modalTitleElement.count();
-      }
-    } catch (error) {
-      modalCount = 0;
-    }
-
-    while (modalCount === 0) {
-      await page.getByText("New Flow", { exact: true }).click();
-      await page.waitForSelector('[data-testid="modal-title"]', {
-        timeout: 3000,
-      });
-      modalCount = await page.getByTestId("modal-title")?.count();
-    }
-
-    const getUA = await page.evaluate(() => navigator.userAgent);
-    const userAgentInfo = uaParser(getUA);
+    await awaitBootstrapTest(page);
 
     await page.waitForSelector('[data-testid="blank-flow"]', {
       timeout: 30000,
@@ -45,12 +17,12 @@ test(
     await page.getByTestId("sidebar-search-input").click();
     await page.getByTestId("sidebar-search-input").fill("ollama");
 
-    await page.waitForSelector('[data-testid="modelsOllama"]', {
+    await page.waitForSelector('[data-testid="languagemodelsOllama"]', {
       timeout: 3000,
     });
 
     await page
-      .getByTestId("modelsOllama")
+      .getByTestId("languagemodelsOllama")
       .dragTo(page.locator('//*[@id="react-flow-id"]'));
     await page.mouse.up();
     await page.mouse.down();
@@ -63,21 +35,31 @@ test(
 
     let cleanCode = await extractAndCleanCode(page);
 
-    // Replace the import statement
-    cleanCode = cleanCode.replace("FloatInput(", "SliderInput(");
-    cleanCode = cleanCode.replace(
-      "from langflow.io import BoolInput, DictInput, DropdownInput, FloatInput, IntInput, StrInput",
-      "from langflow.io import BoolInput, DictInput, DropdownInput, FloatInput, IntInput, StrInput, SliderInput",
+    // Replace the multiline string in the code
+    const newCode = cleanCode.replace(
+      `name="temperature",
+            display_name="Temperature",
+            value=0.1,
+            range_spec=RangeSpec(min=0, max=1, step=0.01),
+            advanced=True,`,
+      `name="temperature",
+            display_name="Temperature",
+            value=0.2,
+            range_spec=RangeSpec(min=3, max=30, step=1),
+            min_label="test",
+            max_label="test2",
+            min_label_icon="pencil-ruler",
+            max_label_icon="palette",
+            slider_buttons=False,
+            slider_buttons_options=[],
+            slider_input=False,
+            advanced=False,`,
     );
-
-    cleanCode = cleanCode.replace(
-      "value=0.2,",
-      "value=0.2, range_spec=RangeSpec(min=3, max=30, step=1), min_label='test', max_label='test2', min_label_icon='pencil-ruler', max_label_icon='palette', slider_buttons=False, slider_buttons_options=[], slider_input=False,",
-    );
-
+    // make sure codes are different
+    expect(cleanCode).not.toEqual(newCode);
     await page.locator("textarea").last().press(`ControlOrMeta+a`);
     await page.keyboard.press("Backspace");
-    await page.locator("textarea").last().fill(cleanCode);
+    await page.locator("textarea").last().fill(newCode);
     await page.locator('//*[@id="checkAndSaveBtn"]').click();
 
     await page.getByTestId("fit_view").click();

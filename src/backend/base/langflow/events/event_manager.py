@@ -1,21 +1,26 @@
-import asyncio
+from __future__ import annotations
+
 import inspect
 import json
 import time
 import uuid
 from functools import partial
-from typing import Literal
+from typing import TYPE_CHECKING
 
 from fastapi.encoders import jsonable_encoder
 from loguru import logger
 from typing_extensions import Protocol
 
-from langflow.schema.log import LoggableType
 from langflow.schema.playground_events import create_event_by_type
+
+if TYPE_CHECKING:
+    import asyncio
+
+    from langflow.schema.log import LoggableType
 
 
 class EventCallback(Protocol):
-    def __call__(self, *, manager: "EventManager", event_type: str, data: LoggableType): ...
+    def __call__(self, *, manager: EventManager, event_type: str, data: LoggableType): ...
 
 
 class PartialEventCallback(Protocol):
@@ -45,7 +50,7 @@ class EventManager:
     def register_event(
         self,
         name: str,
-        event_type: Literal["message", "error", "warning", "info", "token"],
+        event_type: str,
         callback: EventCallback | None = None,
     ) -> None:
         if not name:
@@ -55,12 +60,12 @@ class EventManager:
             msg = "Event name must start with 'on_'"
             raise ValueError(msg)
         if callback is None:
-            _callback = partial(self.send_event, event_type=event_type)
+            callback_ = partial(self.send_event, event_type=event_type)
         else:
-            _callback = partial(callback, manager=self, event_type=event_type)
-        self.events[name] = _callback
+            callback_ = partial(callback, manager=self, event_type=event_type)
+        self.events[name] = callback_
 
-    def send_event(self, *, event_type: Literal["message", "error", "warning", "info", "token"], data: LoggableType):
+    def send_event(self, *, event_type: str, data: LoggableType):
         try:
             if isinstance(data, dict) and event_type in {"message", "error", "warning", "info", "token"}:
                 data = create_event_by_type(event_type, **data)
@@ -92,4 +97,12 @@ def create_default_event_manager(queue):
     manager.register_event("on_end_vertex", "end_vertex")
     manager.register_event("on_build_start", "build_start")
     manager.register_event("on_build_end", "build_end")
+    return manager
+
+
+def create_stream_tokens_event_manager(queue):
+    manager = EventManager(queue)
+    manager.register_event("on_message", "add_message")
+    manager.register_event("on_token", "token")
+    manager.register_event("on_end", "end")
     return manager

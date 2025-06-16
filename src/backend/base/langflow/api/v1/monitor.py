@@ -2,15 +2,17 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi_pagination import Page, Params
+from fastapi_pagination.ext.sqlmodel import apaginate
 from sqlalchemy import delete
 from sqlmodel import col, select
 
-from langflow.api.utils import AsyncDbSession
+from langflow.api.utils import DbSession, custom_params
 from langflow.schema.message import MessageResponse
 from langflow.services.auth.utils import get_current_active_user
 from langflow.services.database.models.message.model import MessageRead, MessageTable, MessageUpdate
-from langflow.services.database.models.transactions.crud import get_transactions_by_flow_id
-from langflow.services.database.models.transactions.model import TransactionReadResponse
+from langflow.services.database.models.transactions.crud import transform_transaction_table
+from langflow.services.database.models.transactions.model import TransactionTable
 from langflow.services.database.models.vertex_builds.crud import (
     delete_vertex_builds_by_flow_id,
     get_vertex_builds_by_flow_id,
@@ -21,7 +23,7 @@ router = APIRouter(prefix="/monitor", tags=["Monitor"])
 
 
 @router.get("/builds")
-async def get_vertex_builds(flow_id: Annotated[UUID, Query()], session: AsyncDbSession) -> VertexBuildMapModel:
+async def get_vertex_builds(flow_id: Annotated[UUID, Query()], session: DbSession) -> VertexBuildMapModel:
     try:
         vertex_builds = await get_vertex_builds_by_flow_id(session, flow_id)
         return VertexBuildMapModel.from_list_of_dicts(vertex_builds)
@@ -30,17 +32,18 @@ async def get_vertex_builds(flow_id: Annotated[UUID, Query()], session: AsyncDbS
 
 
 @router.delete("/builds", status_code=204)
-async def delete_vertex_builds(flow_id: Annotated[UUID, Query()], session: AsyncDbSession) -> None:
+async def delete_vertex_builds(flow_id: Annotated[UUID, Query()], session: DbSession) -> None:
     try:
         await delete_vertex_builds_by_flow_id(session, flow_id)
+        await session.commit()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/messages")
 async def get_messages(
-    session: AsyncDbSession,
-    flow_id: Annotated[str | None, Query()] = None,
+    session: DbSession,
+    flow_id: Annotated[UUID | None, Query()] = None,
     session_id: Annotated[str | None, Query()] = None,
     sender: Annotated[str | None, Query()] = None,
     sender_name: Annotated[str | None, Query()] = None,
@@ -66,7 +69,7 @@ async def get_messages(
 
 
 @router.delete("/messages", status_code=204, dependencies=[Depends(get_current_active_user)])
-async def delete_messages(message_ids: list[UUID], session: AsyncDbSession) -> None:
+async def delete_messages(message_ids: list[UUID], session: DbSession) -> None:
     try:
         await session.exec(delete(MessageTable).where(MessageTable.id.in_(message_ids)))  # type: ignore[attr-defined]
         await session.commit()
@@ -78,7 +81,7 @@ async def delete_messages(message_ids: list[UUID], session: AsyncDbSession) -> N
 async def update_message(
     message_id: UUID,
     message: MessageUpdate,
-    session: AsyncDbSession,
+    session: DbSession,
 ):
     try:
         db_message = await session.get(MessageTable, message_id)
@@ -90,14 +93,14 @@ async def update_message(
 
     try:
         message_dict = message.model_dump(exclude_unset=True, exclude_none=True)
-        message_dict["edit"] = True
+        if "text" in message_dict and message_dict["text"] != db_message.text:
+            message_dict["edit"] = True
         db_message.sqlmodel_update(message_dict)
         session.add(db_message)
         await session.commit()
         await session.refresh(db_message)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
-
     return db_message
 
 
@@ -108,7 +111,7 @@ async def update_message(
 async def update_session_id(
     old_session_id: str,
     new_session_id: Annotated[str, Query(..., description="The new session ID to update to")],
-    session: AsyncDbSession,
+    session: DbSession,
 ) -> list[MessageResponse]:
     try:
         # Get all messages with the old session ID
@@ -141,7 +144,7 @@ async def update_session_id(
 @router.delete("/messages/session/{session_id}", status_code=204)
 async def delete_messages_session(
     session_id: str,
-    session: AsyncDbSession,
+    session: DbSession,
 ):
     try:
         await session.exec(
@@ -159,23 +162,21 @@ async def delete_messages_session(
 @router.get("/transactions")
 async def get_transactions(
     flow_id: Annotated[UUID, Query()],
-    session: AsyncDbSession,
-) -> list[TransactionReadResponse]:
+    session: DbSession,
+    params: Annotated[Params | None, Depends(custom_params)],
+) -> Page[TransactionTable]:
     try:
-        transactions = await get_transactions_by_flow_id(session, flow_id)
-        return [
-            TransactionReadResponse(
-                transaction_id=t.id,
-                timestamp=t.timestamp,
-                vertex_id=t.vertex_id,
-                target_id=t.target_id,
-                inputs=t.inputs,
-                outputs=t.outputs,
-                status=t.status,
-                error=t.error,
-                flow_id=t.flow_id,
+        stmt = (
+            select(TransactionTable)
+            .where(TransactionTable.flow_id == flow_id)
+            .order_by(col(TransactionTable.timestamp))
+        )
+        import warnings
+
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore", category=DeprecationWarning, module=r"fastapi_pagination\.ext\.sqlalchemy"
             )
-            for t in transactions
-        ]
+            return await apaginate(session, stmt, params=params, transformer=transform_transaction_table)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e

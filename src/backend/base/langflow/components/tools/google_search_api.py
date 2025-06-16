@@ -1,15 +1,16 @@
 from langchain_core.tools import Tool
 
 from langflow.base.langchain_utilities.model import LCToolComponent
-from langflow.inputs import IntInput, MultilineInput, SecretStrInput
-from langflow.schema import Data
+from langflow.inputs.inputs import IntInput, MultilineInput, SecretStrInput
+from langflow.schema.data import Data
 
 
 class GoogleSearchAPIComponent(LCToolComponent):
-    display_name = "Google Search API"
+    display_name = "Google Search API [DEPRECATED]"
     description = "Call Google Search API."
     name = "GoogleSearchAPI"
     icon = "Google"
+    legacy = True
     inputs = [
         SecretStrInput(name="google_api_key", display_name="Google API Key", required=True),
         SecretStrInput(name="google_cse_id", display_name="Google CSE ID", required=True),

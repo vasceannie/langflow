@@ -1,33 +1,41 @@
-import ShadTooltip from "@/components/common/shadTooltipComponent";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-} from "@/components/ui/select-custom";
+import ForwardedIconComponent from "@/components/common/genericIconComponent";
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarTrigger,
 } from "@/components/ui/sidebar";
+import {
+  DEFAULT_FOLDER,
+  DEFAULT_FOLDER_DEPRECATED,
+} from "@/constants/constants";
+import { useUpdateUser } from "@/controllers/API/queries/auth";
 import {
   usePatchFolders,
   usePostFolders,
   usePostUploadFolders,
 } from "@/controllers/API/queries/folders";
 import { useGetDownloadFolders } from "@/controllers/API/queries/folders/use-get-download-folders";
-import { ENABLE_CUSTOM_PARAM } from "@/customization/feature-flags";
+import { CustomStoreButton } from "@/customization/components/custom-store-button";
+import {
+  ENABLE_CUSTOM_PARAM,
+  ENABLE_DATASTAX_LANGFLOW,
+  ENABLE_FILE_MANAGEMENT,
+  ENABLE_MCP_NOTICE,
+} from "@/customization/feature-flags";
+import { useCustomNavigate } from "@/customization/hooks/use-custom-navigate";
 import { track } from "@/customization/utils/analytics";
+import { customGetDownloadFolderBlob } from "@/customization/utils/custom-get-download-folders";
 import { createFileUpload } from "@/helpers/create-file-upload";
 import { getObjectsFromFilelist } from "@/helpers/get-objects-from-filelist";
 import useUploadFlow from "@/hooks/flows/use-upload-flow";
 import { useIsMobile } from "@/hooks/use-mobile";
+import useAuthStore from "@/stores/authStore";
 import { useIsFetching, useIsMutating } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useParams } from "react-router-dom";
@@ -37,53 +45,90 @@ import useFlowsManagerStore from "../../../../../stores/flowsManagerStore";
 import { useFolderStore } from "../../../../../stores/foldersStore";
 import { handleKeyDown } from "../../../../../utils/reactflowUtils";
 import { cn } from "../../../../../utils/utils";
-import IconComponent from "../../../../common/genericIconComponent";
-import { Button } from "../../../../ui/button";
-import { Input } from "../../../../ui/input";
 import useFileDrop from "../../hooks/use-on-file-drop";
 import { SidebarFolderSkeleton } from "../sidebarFolderSkeleton";
+import { HeaderButtons } from "./components/header-buttons";
+import { InputEditFolderName } from "./components/input-edit-folder-name";
+import { MCPServerNotice } from "./components/mcp-server-notice";
+import { SelectOptions } from "./components/select-options";
 
 type SideBarFoldersButtonsComponentProps = {
   handleChangeFolder?: (id: string) => void;
   handleDeleteFolder?: (item: FolderType) => void;
+  handleFilesClick?: () => void;
 };
 const SideBarFoldersButtonsComponent = ({
   handleChangeFolder,
   handleDeleteFolder,
+  handleFilesClick,
 }: SideBarFoldersButtonsComponentProps) => {
   const location = useLocation();
   const pathname = location.pathname;
   const folders = useFolderStore((state) => state.folders);
+  const loading = !folders;
+  const refInput = useRef<HTMLInputElement>(null);
+
+  const navigate = useCustomNavigate();
+
+  const currentFolder = pathname.split("/");
+  const urlWithoutPath =
+    pathname.split("/").length < (ENABLE_CUSTOM_PARAM ? 5 : 4);
+  const checkPathFiles = pathname.includes("files");
+
+  const checkPathName = (itemId: string) => {
+    if (urlWithoutPath && itemId === myCollectionId && !checkPathFiles) {
+      return true;
+    }
+    return currentFolder.includes(itemId);
+  };
+
+  const setErrorData = useAlertStore((state) => state.setErrorData);
+  const setSuccessData = useAlertStore((state) => state.setSuccessData);
+  const isMobile = useIsMobile({ maxWidth: 1024 });
+  const folderIdDragging = useFolderStore((state) => state.folderIdDragging);
+  const myCollectionId = useFolderStore((state) => state.myCollectionId);
+  const takeSnapshot = useFlowsManagerStore((state) => state.takeSnapshot);
+
+  const folderId = useParams().folderId ?? myCollectionId ?? "";
+
+  const { dragOver, dragEnter, dragLeave, onDrop } = useFileDrop(folderId);
+  const uploadFlow = useUploadFlow();
+  const [foldersNames, setFoldersNames] = useState({});
+  const [editFolders, setEditFolderName] = useState(
+    folders.map((obj) => ({ name: obj.name, edit: false })) ?? [],
+  );
 
   const isFetchingFolders = !!useIsFetching({
     queryKey: ["useGetFolders"],
     exact: false,
   });
-  const loading = !folders;
-  const refInput = useRef<HTMLInputElement>(null);
-  const [foldersNames, setFoldersNames] = useState({});
-  const takeSnapshot = useFlowsManagerStore((state) => state.takeSnapshot);
-  const [editFolders, setEditFolderName] = useState(
-    folders.map((obj) => ({ name: obj.name, edit: false })) ?? [],
-  );
-  const currentFolder = pathname.split("/");
-  const urlWithoutPath =
-    pathname.split("/").length < (ENABLE_CUSTOM_PARAM ? 5 : 4);
-  const myCollectionId = useFolderStore((state) => state.myCollectionId);
-  const checkPathName = (itemId: string) => {
-    if (urlWithoutPath && itemId === myCollectionId) {
-      return true;
-    }
-    return currentFolder.includes(itemId);
-  };
-  const folderId = useParams().folderId ?? myCollectionId ?? "";
-  const setErrorData = useAlertStore((state) => state.setErrorData);
-  const setSuccessData = useAlertStore((state) => state.setSuccessData);
-  const uploadFlow = useUploadFlow();
 
-  const { dragOver, dragEnter, dragLeave, onDrop } = useFileDrop(folderId);
-
+  const { mutate: mutateDownloadFolder } = useGetDownloadFolders({});
+  const { mutate: mutateAddFolder, isPending } = usePostFolders();
+  const { mutate: mutateUpdateFolder } = usePatchFolders();
   const { mutate } = usePostUploadFolders();
+
+  const checkHoveringFolder = (folderId: string) => {
+    if (folderId === folderIdDragging) {
+      return "bg-accent text-accent-foreground";
+    }
+  };
+
+  const isFetchingFolder = !!useIsFetching({
+    queryKey: ["useGetFolder"],
+    exact: false,
+  });
+
+  const isDeletingFolder = !!useIsMutating({
+    mutationKey: ["useDeleteFolders"],
+  });
+
+  const isUpdatingFolder =
+    isFetchingFolders ||
+    isFetchingFolder ||
+    isPending ||
+    loading ||
+    isDeletingFolder;
 
   const handleUploadFlowsToFolder = () => {
     createFileUpload().then((files: File[]) => {
@@ -107,13 +152,13 @@ const SideBarFoldersButtonsComponent = ({
               {
                 onSuccess: () => {
                   setSuccessData({
-                    title: "Folder uploaded successfully.",
+                    title: "Project uploaded successfully.",
                   });
                 },
                 onError: (err) => {
                   console.log(err);
                   setErrorData({
-                    title: `Error on uploading your folder, try dragging it into an existing folder.`,
+                    title: `Error on uploading your project, try dragging it into an existing project.`,
                     list: [err["response"]["data"]["message"]],
                   });
                 },
@@ -125,62 +170,36 @@ const SideBarFoldersButtonsComponent = ({
     });
   };
 
-  const { mutate: mutateDownloadFolder } = useGetDownloadFolders({});
-
-  const handleDownloadFolder = (id: string) => {
+  const handleDownloadFolder = (id: string, folderName: string) => {
     mutateDownloadFolder(
       {
         folderId: id,
       },
       {
         onSuccess: (response) => {
-          // Create a blob from the response data
-          const blob = new Blob([response.data], {
-            type: "application/x-zip-compressed",
-          });
-
-          const url = window.URL.createObjectURL(blob);
-          const link = document.createElement("a");
-          link.href = url;
-
-          // Get filename from header or use default
-          const filename =
-            response.headers?.["content-disposition"]
-              ?.split("filename=")[1]
-              ?.replace(/['"]/g, "") ?? "flows.zip";
-
-          link.setAttribute("download", filename);
-          document.body.appendChild(link);
-          link.click();
-          link.remove();
-          window.URL.revokeObjectURL(url);
-
-          track("Folder Exported", { folderId: id });
+          customGetDownloadFolderBlob(response, id, folderName, setSuccessData);
         },
-        onError: () => {
+        onError: (e) => {
           setErrorData({
-            title: `An error occurred while downloading folder.`,
+            title: `An error occurred while downloading your project.`,
           });
         },
       },
     );
   };
 
-  const { mutate: mutateAddFolder, isPending } = usePostFolders();
-  const { mutate: mutateUpdateFolder } = usePatchFolders();
-
   function addNewFolder() {
     mutateAddFolder(
       {
         data: {
-          name: "New Folder",
+          name: "New Project",
           parent_id: null,
           description: "",
         },
       },
       {
         onSuccess: (folder) => {
-          track("Create New Folder");
+          track("Create New Project");
           handleChangeFolder!(folder.id);
         },
       },
@@ -257,88 +276,8 @@ const SideBarFoldersButtonsComponent = ({
     }
   };
 
-  const isFetchingFolder = !!useIsFetching({
-    queryKey: ["useGetFolder"],
-    exact: false,
-  });
-
-  const isDeletingFolder = !!useIsMutating({
-    mutationKey: ["useDeleteFolders"],
-  });
-
-  const isUpdatingFolder =
-    isFetchingFolders ||
-    isFetchingFolder ||
-    isPending ||
-    loading ||
-    isDeletingFolder;
-
-  const HeaderButtons = () => (
-    <div className="flex shrink-0 items-center justify-between gap-2">
-      <SidebarTrigger className="lg:hidden">
-        <IconComponent name="PanelLeftClose" className="h-4 w-4" />
-      </SidebarTrigger>
-
-      <div className="flex-1 text-sm font-semibold">Folders</div>
-      <div className="flex items-center gap-1">
-        <UploadFolderButton
-          onClick={handleUploadFlowsToFolder}
-          disabled={isUpdatingFolder}
-        />
-        <AddFolderButton
-          onClick={addNewFolder}
-          disabled={isUpdatingFolder}
-          loading={isPending}
-        />
-      </div>
-    </div>
-  );
-
-  const AddFolderButton = ({ onClick, disabled, loading }) => (
-    <ShadTooltip content="Create new folder" styleClasses="z-50">
-      <Button
-        variant="ghost"
-        size="icon"
-        className="h-7 w-7 border-0 text-zinc-500 hover:bg-zinc-200 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-white"
-        onClick={onClick}
-        data-testid="add-folder-button"
-        disabled={disabled}
-        loading={loading}
-      >
-        <IconComponent name="Plus" className="h-4 w-4" />
-      </Button>
-    </ShadTooltip>
-  );
-
-  const UploadFolderButton = ({ onClick, disabled }) => (
-    <ShadTooltip content="Upload a flow" styleClasses="z-50">
-      <Button
-        variant="ghost"
-        size="icon"
-        className="h-7 w-7 border-0 text-zinc-500 hover:bg-zinc-200 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-white"
-        onClick={onClick}
-        data-testid="upload-folder-button"
-        disabled={disabled}
-      >
-        <IconComponent name="Upload" className="h-4 w-4" />
-      </Button>
-    </ShadTooltip>
-  );
-
-  const FolderSelectItem = ({ name, iconName }) => (
-    <div
-      className={cn(
-        name === "Delete" ? "text-destructive" : "",
-        "flex items-center font-medium",
-      )}
-    >
-      <IconComponent name={iconName} className="mr-2 w-4" />
-      <span>{name}</span>
-    </div>
-  );
-
   const handleDoubleClick = (event, item) => {
-    if (item.name === "My Projects") {
+    if (item.name === DEFAULT_FOLDER_DEPRECATED) {
       return;
     }
 
@@ -395,29 +334,41 @@ const SideBarFoldersButtonsComponent = ({
     }
   };
 
-  const handleSelectChange = (option, folder) => {
-    switch (option) {
-      case "delete":
-        handleDeleteFolder!(folder);
-        break;
-      case "download":
-        handleDownloadFolder(folder.id!);
-        break;
-      case "rename":
-        handleSelectFolderToRename(folder);
-        break;
-    }
-  };
+  const [hoveredFolderId, setHoveredFolderId] = useState<string | null>(null);
 
-  const isMobile = useIsMobile({ maxWidth: 1024 });
+  const userData = useAuthStore((state) => state.userData);
+  const { mutate: updateUser } = useUpdateUser();
+  const userDismissedMcpDialog = userData?.optins?.mcp_dialog_dismissed;
+
+  const [isDismissedMcpDialog, setIsDismissedMcpDialog] = useState(
+    userDismissedMcpDialog,
+  );
+
+  const handleDismissMcpDialog = () => {
+    setIsDismissedMcpDialog(true);
+    updateUser({
+      user_id: userData?.id!,
+      user: {
+        optins: {
+          ...userData?.optins,
+          mcp_dialog_dismissed: true,
+        },
+      },
+    });
+  };
 
   return (
     <Sidebar
       collapsible={isMobile ? "offcanvas" : "none"}
-      data-testid="folder-sidebar"
+      data-testid="project-sidebar"
     >
-      <SidebarHeader className="p-4">
-        <HeaderButtons />
+      <SidebarHeader className="px-4 py-1">
+        <HeaderButtons
+          handleUploadFlowsToFolder={handleUploadFlowsToFolder}
+          isUpdatingFolder={isUpdatingFolder}
+          isPending={isPending}
+          addNewFolder={addNewFolder}
+        />
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup className="p-4 py-2">
@@ -429,131 +380,76 @@ const SideBarFoldersButtonsComponent = ({
                     (folder) => folder.name === item.name,
                   )[0];
                   return (
-                    <SidebarMenuItem>
-                      <SidebarMenuButton
-                        size="md"
-                        onDragOver={(e) => dragOver(e, item.id!)}
-                        onDragEnter={(e) => dragEnter(e, item.id!)}
-                        onDragLeave={dragLeave}
-                        onDrop={(e) => onDrop(e, item.id!)}
-                        key={item.id}
-                        data-testid={`sidebar-nav-${item.name}`}
-                        isActive={checkPathName(item.id!)}
-                        onClick={() => handleChangeFolder!(item.id!)}
-                        className="group/menu-button"
-                      >
-                        <div
-                          onDoubleClick={(event) => {
-                            handleDoubleClick(event, item);
-                          }}
-                          className="flex w-full items-center justify-between gap-2"
+                    <SidebarMenuItem
+                      key={index}
+                      className="group/menu-button"
+                      onMouseEnter={() => setHoveredFolderId(item.id!)}
+                      onMouseLeave={() => setHoveredFolderId(null)}
+                    >
+                      <div className="relative flex w-full">
+                        <SidebarMenuButton
+                          size="md"
+                          onDragOver={(e) => dragOver(e, item.id!)}
+                          onDragEnter={(e) => dragEnter(e, item.id!)}
+                          onDragLeave={dragLeave}
+                          onDrop={(e) => onDrop(e, item.id!)}
+                          key={item.id}
+                          data-testid={`sidebar-nav-${item.name}`}
+                          id={`sidebar-nav-${item.name}`}
+                          isActive={checkPathName(item.id!)}
+                          onClick={() => handleChangeFolder!(item.id!)}
+                          className={cn(
+                            "flex-grow pr-8",
+                            hoveredFolderId === item.id && "bg-accent",
+                            checkHoveringFolder(item.id!),
+                          )}
                         >
-                          <div className="flex flex-1 items-center gap-2">
-                            {editFolderName?.edit && !isUpdatingFolder ? (
-                              <Input
-                                className="h-6 flex-1 focus:border-0"
-                                onChange={(e) => {
-                                  handleEditFolderName(e, item.name);
-                                }}
-                                maxLength={38}
-                                ref={refInput}
-                                onKeyDown={(e) => {
-                                  handleKeyDownFn(e, item);
-                                  handleKeyDown(e, e.key, "");
-                                }}
-                                autoFocus={true}
-                                onBlur={(e) => {
-                                  // fixes autofocus problem where cursor isn't present
-                                  if (
-                                    e.relatedTarget?.id ===
-                                    `options-trigger-${item.name}`
-                                  ) {
-                                    refInput.current?.focus();
-                                    return;
-                                  }
-
-                                  if (refInput.current?.value !== item.name) {
-                                    handleEditNameFolder(item);
-                                  } else {
-                                    editFolderName.edit = false;
-                                  }
-                                  refInput.current?.blur();
-                                }}
-                                value={foldersNames[item.name]}
-                                id={`input-folder-${item.name}`}
-                                data-testid={`input-folder`}
-                              />
-                            ) : (
-                              <span className="block w-0 grow truncate text-[13px] opacity-100">
-                                {item.name}
-                              </span>
-                            )}
-                          </div>
-                          <Select
-                            onValueChange={(value) =>
-                              handleSelectChange(value, item)
-                            }
-                            value=""
+                          <div
+                            onDoubleClick={(event) => {
+                              handleDoubleClick(event, item);
+                            }}
+                            className="flex w-full items-center justify-between gap-2"
                           >
-                            <ShadTooltip
-                              content="Options"
-                              side="right"
-                              styleClasses="z-50"
-                            >
-                              <SelectTrigger
-                                className="w-fit"
-                                id={`options-trigger-${item.name}`}
-                                data-testid="more-options-button"
-                              >
-                                <IconComponent
-                                  name={"MoreHorizontal"}
-                                  className={`w-4 stroke-[1.5] px-0 text-muted-foreground group-hover/menu-button:block group-hover/menu-button:text-foreground ${
-                                    checkPathName(item.id!) ? "block" : "hidden"
-                                  }`}
+                            <div className="flex flex-1 items-center gap-2">
+                              {editFolderName?.edit && !isUpdatingFolder ? (
+                                <InputEditFolderName
+                                  handleEditFolderName={handleEditFolderName}
+                                  item={item}
+                                  refInput={refInput}
+                                  handleKeyDownFn={handleKeyDownFn}
+                                  handleEditNameFolder={handleEditNameFolder}
+                                  editFolderName={editFolderName}
+                                  foldersNames={foldersNames}
+                                  handleKeyDown={handleKeyDown}
                                 />
-                              </SelectTrigger>
-                            </ShadTooltip>
-                            <SelectContent
-                              align="end"
-                              alignOffset={-16}
-                              position="popper"
-                            >
-                              {item.name !== "My Projects" && (
-                                <SelectItem
-                                  id="rename-button"
-                                  value="rename"
-                                  data-testid="btn-rename-folder"
-                                >
-                                  <FolderSelectItem
-                                    name="Rename"
-                                    iconName="SquarePen"
-                                  />
-                                </SelectItem>
+                              ) : (
+                                <span className="block w-0 grow truncate text-sm opacity-100">
+                                  {item.name === DEFAULT_FOLDER_DEPRECATED
+                                    ? DEFAULT_FOLDER
+                                    : item.name}
+                                </span>
                               )}
-                              <SelectItem
-                                value="download"
-                                data-testid="btn-download-folder"
-                              >
-                                <FolderSelectItem
-                                  name="Download Content"
-                                  iconName="Download"
-                                />
-                              </SelectItem>
-                              {index > 0 && (
-                                <SelectItem
-                                  value="delete"
-                                  data-testid="btn-delete-folder"
-                                >
-                                  <FolderSelectItem
-                                    name="Delete"
-                                    iconName="Trash2"
-                                  />
-                                </SelectItem>
-                              )}
-                            </SelectContent>
-                          </Select>
+                            </div>
+                          </div>
+                        </SidebarMenuButton>
+                        <div
+                          className="absolute right-2 top-[0.45rem] flex items-center hover:text-foreground"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <SelectOptions
+                            item={item}
+                            index={index}
+                            handleDeleteFolder={handleDeleteFolder}
+                            handleDownloadFolder={() =>
+                              handleDownloadFolder(item.id!, item.name)
+                            }
+                            handleSelectFolderToRename={
+                              handleSelectFolderToRename
+                            }
+                            checkPathName={checkPathName}
+                          />
                         </div>
-                      </SidebarMenuButton>
+                      </div>
                     </SidebarMenuItem>
                   );
                 })
@@ -566,7 +462,31 @@ const SideBarFoldersButtonsComponent = ({
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+        <div className="flex-1" />
+
+        {ENABLE_MCP_NOTICE && !isDismissedMcpDialog && (
+          <div className="p-2">
+            <MCPServerNotice handleDismissDialog={handleDismissMcpDialog} />
+          </div>
+        )}
       </SidebarContent>
+      {ENABLE_FILE_MANAGEMENT && (
+        <SidebarFooter className="border-t">
+          <div className="grid w-full items-center gap-2 p-2">
+            {/* TODO: Remove this on cleanup */}
+            {ENABLE_DATASTAX_LANGFLOW && <CustomStoreButton />}
+            <SidebarMenuButton
+              isActive={checkPathFiles}
+              onClick={() => handleFilesClick?.()}
+              size="md"
+              className="text-sm"
+            >
+              <ForwardedIconComponent name="File" className="h-4 w-4" />
+              My Files
+            </SidebarMenuButton>
+          </div>
+        </SidebarFooter>
+      )}
     </Sidebar>
   );
 };

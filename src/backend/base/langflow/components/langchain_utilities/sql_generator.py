@@ -5,8 +5,8 @@ from langchain_core.prompts import PromptTemplate
 
 from langflow.base.chains.model import LCChainComponent
 from langflow.field_typing import Message
-from langflow.inputs import HandleInput, IntInput, MultilineInput
-from langflow.template import Output
+from langflow.inputs.inputs import HandleInput, IntInput, MultilineInput
+from langflow.template.field.base import Output
 
 if TYPE_CHECKING:
     from langchain_core.runnables import Runnable
@@ -51,7 +51,7 @@ class SQLGeneratorComponent(LCChainComponent):
         ),
     ]
 
-    outputs = [Output(display_name="Text", name="text", method="invoke_chain")]
+    outputs = [Output(display_name="Message", name="text", method="invoke_chain")]
 
     def invoke_chain(self) -> Message:
         prompt_template = PromptTemplate.from_template(template=self.prompt) if self.prompt else None

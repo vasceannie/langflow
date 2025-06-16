@@ -1,9 +1,9 @@
 import assemblyai as aai
 from loguru import logger
 
-from langflow.custom import Component
+from langflow.custom.custom_component.component import Component
 from langflow.io import DataInput, DropdownInput, IntInput, Output, SecretStrInput
-from langflow.schema import Data
+from langflow.schema.data import Data
 
 
 class AssemblyAIGetSubtitles(Component):
@@ -17,11 +17,13 @@ class AssemblyAIGetSubtitles(Component):
             name="api_key",
             display_name="Assembly API Key",
             info="Your AssemblyAI API key. You can get one from https://www.assemblyai.com/",
+            required=True,
         ),
         DataInput(
             name="transcription_result",
             display_name="Transcription Result",
             info="The transcription result from AssemblyAI",
+            required=True,
         ),
         DropdownInput(
             name="subtitle_format",

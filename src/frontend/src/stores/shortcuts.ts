@@ -13,9 +13,10 @@ export const useShortcutsStore = create<shortcutsStoreType>((set, get) => ({
   flow: "mod+shift+b",
   undo: "mod+z",
   redo: "mod+y",
+  redoAlt: "mod+shift+z",
   openPlayground: "mod+k",
   advancedSettings: "mod+shift+a",
-  minimize: "mod+shift+q",
+  minimize: "mod+.",
   code: "space",
   copy: "mod+c",
   duplicate: "mod+d",
@@ -30,10 +31,10 @@ export const useShortcutsStore = create<shortcutsStoreType>((set, get) => ({
   api: "r",
   update: "mod+u",
   download: "mod+j",
-  freeze: "mod+f",
   freezePath: "mod+shift+f",
   toolMode: "mod+shift+m",
   toggleSidebar: "mod+b",
+  searchComponentsSidebar: "/",
   updateUniqueShortcut: (name, combination) => {
     set({
       [name]: combination,

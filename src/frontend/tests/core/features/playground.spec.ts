@@ -1,6 +1,8 @@
 import { expect, test } from "@playwright/test";
 import * as dotenv from "dotenv";
 import path from "path";
+import { adjustScreenView } from "../../utils/adjust-screen-view";
+import { awaitBootstrapTest } from "../../utils/await-bootstrap-test";
 
 test(
   "fresh start playground",
@@ -10,31 +12,7 @@ test(
       dotenv.config({ path: path.resolve(__dirname, "../../.env") });
     }
 
-    await page.goto("/");
-    await page.locator("span").filter({ hasText: "My Collection" }).isVisible();
-    await page.waitForSelector('[data-testid="mainpage_title"]', {
-      timeout: 30000,
-    });
-
-    await page.waitForSelector('[id="new-project-btn"]', {
-      timeout: 30000,
-    });
-
-    let modalCount = 0;
-    try {
-      const modalTitleElement = await page?.getByTestId("modal-title");
-      if (modalTitleElement) {
-        modalCount = await modalTitleElement.count();
-      }
-    } catch (error) {
-      modalCount = 0;
-    }
-
-    while (modalCount === 0) {
-      await page.getByText("New Flow", { exact: true }).click();
-      await page.waitForTimeout(3000);
-      modalCount = await page.getByTestId("modal-title")?.count();
-    }
+    await awaitBootstrapTest(page);
 
     await page.waitForSelector('[data-testid="blank-flow"]', {
       timeout: 30000,
@@ -44,132 +22,60 @@ test(
 
     await page.getByTestId("sidebar-search-input").click();
     await page.getByTestId("sidebar-search-input").fill("chat output");
-    await page.waitForTimeout(1000);
+    await page.waitForSelector('[data-testid="input_outputChat Output"]', {
+      timeout: 100000,
+    });
 
     await page
-      .getByTestId("outputsChat Output")
-      .dragTo(page.locator('//*[@id="react-flow-id"]'));
-    await page.mouse.up();
-    await page.mouse.down();
+      .getByTestId("input_outputChat Output")
+      .hover()
+      .then(async () => {
+        await page.getByTestId("add-component-button-chat-output").click();
+      });
 
-    await page.getByTestId("fit_view").click();
-    await page.getByTestId("zoom_out").click();
-    await page.getByTestId("zoom_out").click();
-    await page.getByTestId("zoom_out").click();
-    await page.getByTestId("zoom_out").click();
-    await page.getByTestId("zoom_out").click();
     await page.getByTestId("zoom_out").click();
     await page.getByTestId("zoom_out").click();
 
     await page.getByTestId("sidebar-search-input").click();
     await page.getByTestId("sidebar-search-input").fill("chat input");
-    await page.waitForTimeout(1000);
-
-    await page
-      .getByTestId("inputsChat Input")
-      .dragTo(page.locator('//*[@id="react-flow-id"]'));
-    await page.mouse.up();
-    await page.mouse.down();
-
-    await page.waitForSelector('[data-testid="fit_view"]', {
+    await page.waitForSelector('[data-testid="input_outputChat Input"]', {
       timeout: 100000,
     });
 
+    await page
+      .getByTestId("input_outputChat Input")
+      .dragTo(page.locator('//*[@id="react-flow-id"]'), {
+        targetPosition: { x: 100, y: 100 },
+      });
+
     await page.getByTestId("sidebar-search-input").click();
     await page.getByTestId("sidebar-search-input").fill("text output");
-    await page.waitForTimeout(1000);
+    await page.waitForSelector('[data-testid="input_outputText Output"]', {
+      timeout: 100000,
+    });
 
     await page
-      .getByTestId("outputsText Output")
-      .dragTo(page.locator('//*[@id="react-flow-id"]'));
-    await page.mouse.up();
-    await page.mouse.down();
+      .getByTestId("input_outputText Output")
+      .dragTo(page.locator('//*[@id="react-flow-id"]'), {
+        targetPosition: { x: 300, y: 300 },
+      });
 
-    await page.getByTestId("fit_view").click();
-    await page.getByTestId("zoom_out").click();
-    await page.getByTestId("zoom_out").click();
-    await page.getByTestId("zoom_out").click();
-    await page.getByTestId("zoom_out").click();
-    await page.getByTestId("zoom_out").click();
-    await page.getByTestId("zoom_out").click();
-    await page.getByTestId("zoom_out").click();
+    await adjustScreenView(page);
 
-    const elementsChatInput = await page
-      .locator('[data-testid="handle-chatinput-shownode-message-right"]')
-      .all();
+    await page
+      .getByTestId("handle-chatinput-noshownode-chat message-source")
+      .click();
 
-    let visibleElementHandle;
+    await page.getByTestId("handle-textoutput-shownode-inputs-left").click();
 
-    for (const element of elementsChatInput) {
-      if (await element.isVisible()) {
-        visibleElementHandle = element;
-        break;
-      }
-    }
+    await page
+      .getByTestId("handle-textoutput-shownode-output text-right")
+      .click();
+    await page
+      .getByTestId("handle-chatoutput-noshownode-inputs-target")
+      .click();
 
-    // Click and hold on the first element
-    await visibleElementHandle.hover();
-    await page.mouse.down();
-
-    // Move to the second element
-
-    const elementsTextOutput = await page
-      .getByTestId("handle-textoutput-shownode-text-left")
-      .all();
-
-    for (const element of elementsTextOutput) {
-      if (await element.isVisible()) {
-        visibleElementHandle = element;
-        break;
-      }
-    }
-
-    await visibleElementHandle.hover();
-
-    // Release the mouse
-    await page.mouse.up();
-
-    await page.getByTestId("fit_view").click();
-    await page.getByTestId("fit_view").click();
-    await page.getByTestId("fit_view").click();
-    await page.getByTestId("fit_view").click();
-
-    //
-
-    const elementsTextOutputRight = await page
-      .locator('[data-testid="handle-textoutput-shownode-text-right"]')
-      .all();
-
-    for (const element of elementsTextOutputRight) {
-      if (await element.isVisible()) {
-        visibleElementHandle = element;
-        break;
-      }
-    }
-
-    // Click and hold on the first element
-    await visibleElementHandle.hover();
-    await page.mouse.down();
-
-    //
-    const elementsChatOutput = await page
-      .getByTestId("handle-chatoutput-shownode-text-left")
-      .all();
-
-    for (const element of elementsChatOutput) {
-      if (await element.isVisible()) {
-        visibleElementHandle = element;
-        break;
-      }
-    }
-
-    await visibleElementHandle.hover();
-
-    // Release the mouse
-    await page.mouse.up();
-
-    await page.getByTestId("fit_view").click();
-    await page.getByText("Playground", { exact: true }).last().click();
+    await page.getByRole("button", { name: "Playground", exact: true }).click();
     await page.waitForSelector('[data-testid="input-chat-playground"]', {
       timeout: 100000,
     });
@@ -194,7 +100,6 @@ test(
       .filter({ hasText: /^Usermessage 1$/ })
       .getByTestId("icon-Pen")
       .click();
-    await page.waitForTimeout(500);
 
     await page.getByTestId("textarea").fill("edit_1");
     await page.getByTestId("save-button").click();
@@ -203,8 +108,6 @@ test(
     // check cancel edit
     await page.getByTestId("sender_name_user").hover();
     await page.getByTestId("icon-Pen").first().click();
-    await page.waitForTimeout(500);
-
     await page.getByTestId("textarea").fill("cancel_edit");
     await page.getByTestId("cancel-button").click();
     await page.getByTestId("chat-message-User-edit_1").click();
@@ -216,7 +119,6 @@ test(
       .click();
     await page.getByTestId("chat-message-AI-message 1").hover();
     await page.getByTestId("icon-Pen").last().click();
-    await page.waitForTimeout(500);
 
     await page.getByTestId("textarea").fill("edit_bot_1");
     await page.getByTestId("save-button").click();
@@ -224,7 +126,6 @@ test(
     // check cancel edit bot
     await page.getByTestId("chat-message-AI-edit_bot_1").hover();
     await page.getByTestId("icon-Pen").last().click();
-    await page.waitForTimeout(500);
 
     await page.getByTestId("textarea").fill("edit_bot_cancel");
     await page.getByTestId("cancel-button").click();
@@ -267,23 +168,67 @@ test(
     await page.getByTestId("chat-message-User-session_after_delete").click();
     await expect(page.getByTestId("session-selector")).toBeVisible();
 
-    // check new chat
-    await page.getByTestId("new-chat").click();
-    await page.waitForTimeout(5000);
-    await page.getByText("New chat").click();
-    await page.getByTestId("input-chat-playground").click();
-    await page.getByTestId("input-chat-playground").fill("second session");
-    await page.keyboard.press("Enter");
-    await page.waitForTimeout(5000);
+    await page.waitForTimeout(500);
 
-    await page.getByTestId("chat-message-User-second session").click();
-    await page
-      .getByTestId("chat-message-AI-second session")
-      .getByText("second session")
-      .click();
-    expect(await page.getByTestId("session-selector").count()).toBe(2);
+    // check helpful button
+    await page.getByTestId("chat-message-AI-session_after_delete").hover();
+    await page.getByTestId("helpful-button").click();
 
-    const sessionElements = await page.getByTestId("session-selector").all();
-    expect(sessionElements.length).toBe(2);
+    await page.waitForTimeout(500);
+
+    await page.getByTestId("chat-message-AI-session_after_delete").hover();
+    await expect(page.getByTestId("icon-ThumbUpIconCustom")).toBeVisible({
+      timeout: 10000,
+    });
+
+    await page.waitForTimeout(500);
+
+    await page.getByTestId("helpful-button").click();
+    await page.getByTestId("chat-message-AI-session_after_delete").hover();
+    await expect(page.getByTestId("icon-ThumbUpIconCustom")).toBeVisible({
+      timeout: 10000,
+      visible: false,
+    });
+    // check not helpful button
+    await page.waitForTimeout(500);
+
+    await page.getByTestId("chat-message-AI-session_after_delete").hover();
+    await page.getByTestId("not-helpful-button").click();
+    await page.waitForTimeout(500);
+
+    await page.getByTestId("chat-message-AI-session_after_delete").hover();
+    await expect(page.getByTestId("icon-ThumbDownIconCustom")).toBeVisible({
+      timeout: 10000,
+    });
+    await page.getByTestId("not-helpful-button").click();
+    await page.waitForTimeout(500);
+
+    await page.getByTestId("chat-message-AI-session_after_delete").hover();
+    await expect(page.getByTestId("icon-ThumbDownIconCustom")).toBeVisible({
+      timeout: 10000,
+      visible: false,
+    });
+    // check switch feedback
+    await page.waitForTimeout(500);
+
+    await page.getByTestId("chat-message-AI-session_after_delete").hover();
+    await page.getByTestId("helpful-button").click();
+    await page.waitForTimeout(500);
+
+    await page.getByTestId("chat-message-AI-session_after_delete").hover();
+    await expect(page.getByTestId("icon-ThumbUpIconCustom")).toBeVisible({
+      timeout: 10000,
+    });
+    await page.getByTestId("not-helpful-button").click();
+    await page.waitForTimeout(500);
+
+    await page.getByTestId("chat-message-AI-session_after_delete").hover();
+    await expect(page.getByTestId("icon-ThumbDownIconCustom")).toBeVisible({
+      timeout: 10000,
+    });
+    await expect(page.getByTestId("icon-ThumbUpIconCustom")).toBeVisible({
+      timeout: 10000,
+      visible: false,
+    });
   },
 );

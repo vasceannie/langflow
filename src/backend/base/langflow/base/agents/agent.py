@@ -1,4 +1,3 @@
-import asyncio
 import re
 from abc import abstractmethod
 from typing import TYPE_CHECKING, cast
@@ -10,21 +9,22 @@ from langchain_core.runnables import Runnable
 from langflow.base.agents.callback import AgentAsyncHandler
 from langflow.base.agents.events import ExceptionWithMessageError, process_agent_events
 from langflow.base.agents.utils import data_to_messages
-from langflow.custom import Component
-from langflow.custom.custom_component.component import _get_component_toolkit
+from langflow.custom.custom_component.component import Component, _get_component_toolkit
 from langflow.field_typing import Tool
 from langflow.inputs.inputs import InputTypes, MultilineInput
 from langflow.io import BoolInput, HandleInput, IntInput, MessageTextInput
+from langflow.logging import logger
 from langflow.memory import delete_message
-from langflow.schema import Data
 from langflow.schema.content_block import ContentBlock
-from langflow.schema.log import SendMessageFunctionType
+from langflow.schema.data import Data
 from langflow.schema.message import Message
-from langflow.template import Output
+from langflow.template.field.base import Output
 from langflow.utils.constants import MESSAGE_SENDER_AI
 
 if TYPE_CHECKING:
     from langchain_core.messages import BaseMessage
+
+    from langflow.schema.log import SendMessageFunctionType
 
 
 DEFAULT_TOOLS_DESCRIPTION = "A helpful assistant with access to the following tools:"
@@ -57,10 +57,11 @@ class LCAgentComponent(Component):
         ),
         MultilineInput(
             name="agent_description",
-            display_name="Agent Description",
+            display_name="Agent Description [Deprecated]",
             info=(
                 "The description of the agent. This is only used when in Tool Mode. "
-                f"Defaults to '{DEFAULT_TOOLS_DESCRIPTION}' and tools are added dynamically."
+                f"Defaults to '{DEFAULT_TOOLS_DESCRIPTION}' and tools are added dynamically. "
+                "This feature is deprecated and will be removed in future versions."
             ),
             advanced=True,
             value=DEFAULT_TOOLS_DESCRIPTION,
@@ -68,7 +69,7 @@ class LCAgentComponent(Component):
     ]
 
     outputs = [
-        Output(display_name="Agent", name="agent", method="build_agent"),
+        Output(display_name="Agent", name="agent", method="build_agent", hidden=True, tool_mode=False),
         Output(display_name="Response", name="response", method="message_response"),
     ]
 
@@ -123,20 +124,20 @@ class LCAgentComponent(Component):
         if isinstance(agent, AgentExecutor):
             runnable = agent
         else:
-            if not hasattr(self, "tools") or not self.tools:
-                msg = "Tools are required to run the agent."
-                raise ValueError(msg)
+            # note the tools are not required to run the agent, hence the validation removed.
             handle_parsing_errors = hasattr(self, "handle_parsing_errors") and self.handle_parsing_errors
             verbose = hasattr(self, "verbose") and self.verbose
             max_iterations = hasattr(self, "max_iterations") and self.max_iterations
             runnable = AgentExecutor.from_agent_and_tools(
                 agent=agent,
-                tools=self.tools,
+                tools=self.tools or [],
                 handle_parsing_errors=handle_parsing_errors,
                 verbose=verbose,
                 max_iterations=max_iterations,
             )
         input_dict: dict[str, str | list[BaseMessage]] = {"input": self.input_value}
+        if hasattr(self, "system_prompt"):
+            input_dict["system_prompt"] = self.system_prompt
         if hasattr(self, "chat_history") and self.chat_history:
             input_dict["chat_history"] = data_to_messages(self.chat_history)
 
@@ -162,14 +163,18 @@ class LCAgentComponent(Component):
                     version="v2",
                 ),
                 agent_message,
-                cast(SendMessageFunctionType, self.send_message),
+                cast("SendMessageFunctionType", self.send_message),
             )
         except ExceptionWithMessageError as e:
-            msg_id = e.agent_message.id
-            await asyncio.to_thread(delete_message, id_=msg_id)
-            self._send_message_event(e.agent_message, category="remove_message")
+            if hasattr(e, "agent_message") and hasattr(e.agent_message, "id"):
+                msg_id = e.agent_message.id
+                await delete_message(id_=msg_id)
+            await self._send_message_event(e.agent_message, category="remove_message")
+            logger.error(f"ExceptionWithMessageError: {e}")
             raise
-        except Exception:
+        except Exception as e:
+            # Log or handle any other exceptions
+            logger.error(f"Error: {e}")
             raise
 
         self.status = result
@@ -197,7 +202,7 @@ class LCToolsAgentComponent(LCAgentComponent):
         HandleInput(
             name="tools",
             display_name="Tools",
-            input_types=["Tool", "BaseTool", "StructuredTool"],
+            input_types=["Tool"],
             is_list=True,
             required=False,
             info="These are the tools that the agent can use to help with tasks.",
@@ -230,15 +235,15 @@ class LCToolsAgentComponent(LCAgentComponent):
             tools_names = ", ".join([tool.name for tool in self.tools])
         return tools_names
 
-    def to_toolkit(self) -> list[Tool]:
+    async def _get_tools(self) -> list[Tool]:
         component_toolkit = _get_component_toolkit()
         tools_names = self._build_tools_names()
         agent_description = self.get_tool_description()
-        # Check if tools_description is the default value
-        if agent_description == DEFAULT_TOOLS_DESCRIPTION:
-            description = f"{agent_description}{tools_names}"
-        else:
-            description = agent_description
-        return component_toolkit(component=self).get_tools(
+        # TODO: Agent Description Depreciated Feature to be removed
+        description = f"{agent_description}{tools_names}"
+        tools = component_toolkit(component=self).get_tools(
             tool_name=self.get_tool_name(), tool_description=description, callbacks=self.get_langchain_callbacks()
         )
+        if hasattr(self, "tools_metadata"):
+            tools = component_toolkit(component=self, metadata=self.tools_metadata).update_tools_metadata(tools=tools)
+        return tools

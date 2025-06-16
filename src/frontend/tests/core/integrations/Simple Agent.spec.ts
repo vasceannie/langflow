@@ -1,11 +1,13 @@
 import { expect, test } from "@playwright/test";
 import * as dotenv from "dotenv";
 import path from "path";
-import uaParser from "ua-parser-js";
+import { awaitBootstrapTest } from "../../utils/await-bootstrap-test";
+import { initialGPTsetup } from "../../utils/initialGPTsetup";
+import { withEventDeliveryModes } from "../../utils/withEventDeliveryModes";
 
-test(
+withEventDeliveryModes(
   "Simple Agent",
-  { tag: ["@release", "@starter-project"] },
+  { tag: ["@release", "@starter-projects"] },
   async ({ page }) => {
     test.skip(
       !process?.env?.OPENAI_API_KEY,
@@ -17,87 +19,34 @@ test(
       dotenv.config({ path: path.resolve(__dirname, "../../.env") });
     }
 
-    await page.goto("/");
-    await page.waitForSelector('[data-testid="mainpage_title"]', {
-      timeout: 30000,
-    });
-
-    await page.waitForSelector('[id="new-project-btn"]', {
-      timeout: 30000,
-    });
-
-    let modalCount = 0;
-    try {
-      const modalTitleElement = await page?.getByTestId("modal-title");
-      if (modalTitleElement) {
-        modalCount = await modalTitleElement.count();
-      }
-    } catch (error) {
-      modalCount = 0;
-    }
-
-    while (modalCount === 0) {
-      await page.getByText("New Flow", { exact: true }).click();
-      await page.waitForSelector('[data-testid="modal-title"]', {
-        timeout: 3000,
-      });
-      modalCount = await page.getByTestId("modal-title")?.count();
-    }
-
-    const getUA = await page.evaluate(() => navigator.userAgent);
-    const userAgentInfo = uaParser(getUA);
+    await awaitBootstrapTest(page);
 
     await page.getByTestId("side_nav_options_all-templates").click();
     await page.getByRole("heading", { name: "Simple Agent" }).first().click();
-
-    await page.waitForSelector('[data-testid="fit_view"]', {
-      timeout: 100000,
-    });
-
-    await page.getByTestId("fit_view").click();
-    await page.getByTestId("zoom_out").click();
-    await page.getByTestId("zoom_out").click();
-    await page.getByTestId("zoom_out").click();
-
-    let outdatedComponents = await page
-      .getByTestId("icon-AlertTriangle")
-      .count();
-
-    while (outdatedComponents > 0) {
-      await page.getByTestId("icon-AlertTriangle").first().click();
-      outdatedComponents = await page.getByTestId("icon-AlertTriangle").count();
-    }
-
-    let filledApiKey = await page.getByTestId("remove-icon-badge").count();
-    while (filledApiKey > 0) {
-      await page.getByTestId("remove-icon-badge").first().click();
-      filledApiKey = await page.getByTestId("remove-icon-badge").count();
-    }
-
-    await page
-      .getByTestId("popover-anchor-input-api_key")
-      .fill(process.env.OPENAI_API_KEY ?? "");
-
-    await page.getByTestId("fit_view").click();
-
-    await page.getByTestId("dropdown_str_model_name").click();
-    await page.getByTestId("gpt-4o-1-option").click();
-
-    await page.getByTestId("button_run_chat output").last().click();
-
-    await page.waitForSelector("text=built successfully", {
-      timeout: 10000 * 60 * 3,
-    });
+    await initialGPTsetup(page);
 
     await page.getByTestId("playground-btn-flow-io").click();
 
-    const textContents = await page
-      .getByTestId("div-chat-message")
-      .allTextContents();
+    await page
+      .getByTestId("input-chat-playground")
+      .last()
+      .fill("Hello, tell me about Langflow.");
 
-    const concatAllText = textContents.join(" ").toLowerCase();
+    await page.getByTestId("button-send").last().click();
 
-    expect(concatAllText).toContain("hello! how can i assist you today?");
-    expect(concatAllText.length).toBeGreaterThan(20);
+    const stopButton = page.getByRole("button", { name: "Stop" });
+    await stopButton.waitFor({ state: "visible", timeout: 30000 });
+
+    if (await stopButton.isVisible()) {
+      await expect(stopButton).toBeHidden({ timeout: 120000 });
+    }
+
+    const textContents = await page.getByTestId("div-chat-message").innerText();
+
+    expect(await page.getByTestId("header-icon").last().isVisible());
+    expect(await page.getByTestId("duration-display").last().isVisible());
+    expect(await page.getByTestId("icon-check").nth(0).isVisible());
+    expect(await page.getByTestId("icon-Check").nth(0).isVisible());
+    expect(textContents.length).toBeGreaterThan(30);
   },
 );

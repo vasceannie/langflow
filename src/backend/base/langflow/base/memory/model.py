@@ -2,9 +2,10 @@ from abc import abstractmethod
 
 from langchain.memory import ConversationBufferMemory
 
-from langflow.custom import Component
-from langflow.field_typing import BaseChatMemory, BaseChatMessageHistory
-from langflow.template import Output
+from langflow.custom.custom_component.component import Component
+from langflow.field_typing import BaseChatMemory
+from langflow.field_typing.constants import Memory
+from langflow.template.field.base import Output
 
 
 class LCChatMemoryComponent(Component):
@@ -29,8 +30,9 @@ class LCChatMemoryComponent(Component):
                 raise ValueError(msg)
 
     def build_base_memory(self) -> BaseChatMemory:
+        """Builds the base memory."""
         return ConversationBufferMemory(chat_memory=self.build_message_history())
 
     @abstractmethod
-    def build_message_history(self) -> BaseChatMessageHistory:
+    def build_message_history(self) -> Memory:
         """Builds the chat message history memory."""

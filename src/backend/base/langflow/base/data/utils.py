@@ -8,7 +8,7 @@ import orjson
 import yaml
 from defusedxml import ElementTree
 
-from langflow.schema import Data
+from langflow.schema.data import Data
 
 # Types of files that can be read simply by file.read()
 # and have 100% to be completely readable
@@ -56,11 +56,12 @@ def format_directory_path(path: str) -> str:
     return path.replace("\n", "\\n")
 
 
+# Ignoring FBT001 because the DirectoryComponent in 1.0.19
+# calls this function without keyword arguments
 def retrieve_file_paths(
     path: str,
-    *,
-    load_hidden: bool,
-    recursive: bool,
+    load_hidden: bool,  # noqa: FBT001
+    recursive: bool,  # noqa: FBT001
     depth: int,
     types: list[str] = TEXT_FILE_TYPES,
 ) -> list[str]:
@@ -108,15 +109,15 @@ def partition_file_to_data(file_path: str, *, silent_errors: bool) -> Data | Non
 
 
 def read_text_file(file_path: str) -> str:
-    _file_path = Path(file_path)
-    raw_data = _file_path.read_bytes()
+    file_path_ = Path(file_path)
+    raw_data = file_path_.read_bytes()
     result = chardet.detect(raw_data)
     encoding = result["encoding"]
 
     if encoding in {"Windows-1252", "Windows-1254", "MacRoman"}:
         encoding = "utf-8"
 
-    return _file_path.read_text(encoding=encoding)
+    return file_path_.read_text(encoding=encoding)
 
 
 def read_docx_file(file_path: str) -> str:
@@ -145,12 +146,12 @@ def parse_text_file_to_data(file_path: str, *, silent_errors: bool) -> Data | No
 
         # if file is json, yaml, or xml, we can parse it
         if file_path.endswith(".json"):
-            text = orjson.loads(text)
-            if isinstance(text, dict):
-                text = {k: normalize_text(v) if isinstance(v, str) else v for k, v in text.items()}
-            elif isinstance(text, list):
-                text = [normalize_text(item) if isinstance(item, str) else item for item in text]
-            text = orjson.dumps(text).decode("utf-8")
+            loaded_json = orjson.loads(text)
+            if isinstance(loaded_json, dict):
+                loaded_json = {k: normalize_text(v) if isinstance(v, str) else v for k, v in loaded_json.items()}
+            elif isinstance(loaded_json, list):
+                loaded_json = [normalize_text(item) if isinstance(item, str) else item for item in loaded_json]
+            text = orjson.dumps(loaded_json).decode("utf-8")
 
         elif file_path.endswith((".yaml", ".yml")):
             text = yaml.safe_load(text)

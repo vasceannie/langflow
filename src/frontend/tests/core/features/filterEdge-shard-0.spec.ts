@@ -1,39 +1,19 @@
 import { expect, test } from "@playwright/test";
+import { addLegacyComponents } from "../../utils/add-legacy-components";
+import { adjustScreenView } from "../../utils/adjust-screen-view";
+import { awaitBootstrapTest } from "../../utils/await-bootstrap-test";
 
 test(
   "user must see on handle hover a tooltip with possibility connections",
   { tag: ["@release", "@components", "@api"] },
   async ({ page }) => {
-    await page.goto("/");
-    await page.waitForTimeout(1000);
-
-    let modalCount = 0;
-    try {
-      const modalTitleElement = await page?.getByTestId("modal-title");
-      if (modalTitleElement) {
-        modalCount = await modalTitleElement.count();
-      }
-    } catch (error) {
-      modalCount = 0;
-    }
-
-    while (modalCount === 0) {
-      await page.getByText("New Flow", { exact: true }).click();
-      await page.waitForTimeout(3000);
-      modalCount = await page.getByTestId("modal-title")?.count();
-    }
+    await awaitBootstrapTest(page);
 
     await page.getByTestId("blank-flow").click();
     await page.getByTestId("sidebar-search-input").click();
     await page.getByTestId("sidebar-search-input").fill("retrievalqa");
 
-    await page.getByTestId("sidebar-options-trigger").click();
-    await page
-      .getByTestId("sidebar-legacy-switch")
-      .isVisible({ timeout: 5000 });
-    await page.getByTestId("sidebar-legacy-switch").click();
-    await expect(page.getByTestId("sidebar-legacy-switch")).toBeChecked();
-    await page.getByTestId("sidebar-options-trigger").click();
+    await addLegacyComponents(page);
 
     await page.waitForTimeout(1000);
     await page
@@ -41,10 +21,7 @@ test(
       .dragTo(page.locator('//*[@id="react-flow-id"]'));
     await page.mouse.up();
     await page.mouse.down();
-    await page.getByTestId("fit_view").click();
-    await page.getByTestId("zoom_out").click();
-    await page.getByTestId("zoom_out").click();
-    await page.getByTestId("zoom_out").click();
+    await adjustScreenView(page, { numberOfZoomOut: 3 });
 
     const outputElements = await page
       .getByTestId("handle-retrievalqa-shownode-text-right")
@@ -65,7 +42,7 @@ test(
 
       await expect(
         page
-          .getByText("Select to filter compatible inputs and components")
+          .getByText("Click to filter compatible inputs and components")
           .first(),
       ).toBeVisible();
 
@@ -76,14 +53,13 @@ test(
       ).toBeVisible();
     });
 
-    await page.getByTestId("fit_view").click();
-    await page.getByTestId("zoom_out").click();
-    await page.getByTestId("zoom_out").click();
-    await page.getByTestId("zoom_out").click();
+    await adjustScreenView(page);
 
     const rqaChainInputElements1 = await page
       .getByTestId("handle-retrievalqa-shownode-language model-left")
       .all();
+
+    await page.waitForTimeout(1000);
 
     for (const element of rqaChainInputElements1) {
       if (await element.isVisible()) {
@@ -92,14 +68,18 @@ test(
       }
     }
 
+    await page.waitForTimeout(500);
+
     await visibleElementHandle.hover().then(async () => {
+      await page.waitForTimeout(1000);
+
       await expect(
         page.getByText("Drag to connect compatible outputs").first(),
       ).toBeVisible();
 
       await expect(
         page
-          .getByText("Select to filter compatible outputs and components")
+          .getByText("Click to filter compatible outputs and components")
           .first(),
       ).toBeVisible();
 
@@ -109,10 +89,7 @@ test(
         page.getByTestId("input-tooltip-languagemodel").first(),
       ).toBeVisible();
     });
-    await page.getByTestId("fit_view").click();
-    await page.getByTestId("zoom_out").click();
-    await page.getByTestId("zoom_out").click();
-    await page.getByTestId("zoom_out").click();
+    await adjustScreenView(page);
 
     const rqaChainInputElements0 = await page
       .getByTestId("handle-retrievalqa-shownode-retriever-left")
@@ -125,14 +102,18 @@ test(
       }
     }
 
+    await page.waitForTimeout(500);
+
     await visibleElementHandle.hover().then(async () => {
+      await page.waitForTimeout(1000);
+
       await expect(
         page.getByText("Drag to connect compatible outputs").first(),
       ).toBeVisible();
 
       await expect(
         page
-          .getByText("Select to filter compatible outputs and components")
+          .getByText("Click to filter compatible outputs and components")
           .first(),
       ).toBeVisible();
 
@@ -143,10 +124,7 @@ test(
       ).toBeVisible();
     });
 
-    await page.getByTestId("fit_view").click();
-    await page.getByTestId("zoom_out").click();
-    await page.getByTestId("zoom_out").click();
-    await page.getByTestId("zoom_out").click();
+    await adjustScreenView(page);
 
     const rqaChainInputElements2 = await page
       .getByTestId("handle-retrievalqa-shownode-memory-left")
@@ -166,7 +144,7 @@ test(
 
       await expect(
         page
-          .getByText("Select to filter compatible outputs and components")
+          .getByText("Click to filter compatible outputs and components")
           .first(),
       ).toBeVisible();
 

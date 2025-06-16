@@ -1,10 +1,10 @@
 from langchain.chains.query_constructor.base import AttributeInfo
 from langchain.retrievers.self_query.base import SelfQueryRetriever
 
-from langflow.custom import Component
-from langflow.inputs import HandleInput, MessageTextInput
+from langflow.custom.custom_component.component import Component
+from langflow.inputs.inputs import HandleInput, MessageTextInput
 from langflow.io import Output
-from langflow.schema import Data
+from langflow.schema.data import Data
 from langflow.schema.message import Message
 
 
@@ -20,7 +20,7 @@ class SelfQueryRetrieverComponent(Component):
             name="query",
             display_name="Query",
             info="Query to be passed as input.",
-            input_types=["Message", "Text"],
+            input_types=["Message"],
         ),
         HandleInput(
             name="vectorstore",

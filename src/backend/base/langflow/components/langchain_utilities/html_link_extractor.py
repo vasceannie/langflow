@@ -4,7 +4,7 @@ from langchain_community.graph_vectorstores.extractors import HtmlLinkExtractor,
 from langchain_core.documents import BaseDocumentTransformer
 
 from langflow.base.document_transformers.model import LCDocumentTransformerComponent
-from langflow.inputs import BoolInput, DataInput, StrInput
+from langflow.inputs.inputs import BoolInput, DataInput, StrInput
 
 
 class HtmlLinkExtractorComponent(LCDocumentTransformerComponent):
@@ -22,6 +22,7 @@ class HtmlLinkExtractorComponent(LCDocumentTransformerComponent):
             display_name="Input",
             info="The texts from which to extract links.",
             input_types=["Document", "Data"],
+            required=True,
         ),
     ]
 

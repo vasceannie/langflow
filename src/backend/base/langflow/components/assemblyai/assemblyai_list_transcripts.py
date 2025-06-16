@@ -1,9 +1,9 @@
 import assemblyai as aai
 from loguru import logger
 
-from langflow.custom import Component
+from langflow.custom.custom_component.component import Component
 from langflow.io import BoolInput, DropdownInput, IntInput, MessageTextInput, Output, SecretStrInput
-from langflow.schema import Data
+from langflow.schema.data import Data
 
 
 class AssemblyAIListTranscripts(Component):
@@ -17,6 +17,7 @@ class AssemblyAIListTranscripts(Component):
             name="api_key",
             display_name="Assembly API Key",
             info="Your AssemblyAI API key. You can get one from https://www.assemblyai.com/",
+            required=True,
         ),
         IntInput(
             name="limit",

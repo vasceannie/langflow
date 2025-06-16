@@ -1,14 +1,13 @@
 import os
 
 import pytest
-from langflow.components.inputs import ChatInput
-from langflow.components.inputs.text import TextInputComponent
+from langflow.components.input_output import ChatInput, ChatOutput, TextOutputComponent
+from langflow.components.input_output.text import TextInputComponent
+from langflow.components.languagemodels import OpenAIModelComponent
 from langflow.components.logic.conditional_router import ConditionalRouterComponent
-from langflow.components.models import OpenAIModelComponent
-from langflow.components.outputs import ChatOutput, TextOutputComponent
 from langflow.components.prompts import PromptComponent
-from langflow.custom import Component
-from langflow.graph import Graph
+from langflow.custom.custom_component.component import Component
+from langflow.graph.graph.base import Graph
 from langflow.graph.graph.utils import find_cycle_vertices
 from langflow.io import MessageTextInput, Output
 from langflow.schema.message import Message
@@ -22,7 +21,7 @@ class Concatenate(Component):
         MessageTextInput(name="text", display_name="Text", required=True),
     ]
     outputs = [
-        Output(display_name="Text", name="some_text", method="concatenate"),
+        Output(display_name="Message", name="some_text", method="concatenate"),
     ]
 
     def concatenate(self) -> Message:
@@ -33,7 +32,8 @@ class Concatenate(Component):
 def test_cycle_in_graph():
     chat_input = ChatInput(_id="chat_input")
     router = ConditionalRouterComponent(_id="router", default_route="true_result")
-    chat_input.set(input_value=router.false_response)
+    # Use router's message output instead of false_response
+    chat_input.set(input_value=router.message)
     concat_component = Concatenate(_id="concatenate")
     concat_component.set(text=chat_input.message_response)
     router.set(
@@ -81,13 +81,13 @@ def test_cycle_in_graph():
 
 
 def test_cycle_in_graph_max_iterations():
-    chat_input = ChatInput(_id="chat_input")
+    text_input = TextInputComponent(_id="text_input")
     router = ConditionalRouterComponent(_id="router")
-    chat_input.set(input_value=router.false_response)
+    text_input.set(input_value=router.false_response)
     concat_component = Concatenate(_id="concatenate")
-    concat_component.set(text=chat_input.message_response)
+    concat_component.set(text=text_input.text_response)
     router.set(
-        input_text=chat_input.message_response,
+        input_text=text_input.text_response,
         match_text="testtesttesttest",
         operator="equals",
         message=concat_component.concatenate,
@@ -97,11 +97,11 @@ def test_cycle_in_graph_max_iterations():
     chat_output = ChatOutput(_id="chat_output")
     chat_output.set(input_value=text_output.text_response)
 
-    graph = Graph(chat_input, chat_output)
+    graph = Graph(text_input, chat_output)
     assert graph.is_cyclic is True
 
     # Run queue should contain chat_input and not router
-    assert "chat_input" in graph._run_queue
+    assert "text_input" in graph._run_queue
     assert "router" not in graph._run_queue
 
     with pytest.raises(ValueError, match="Max iterations reached"):
@@ -111,7 +111,8 @@ def test_cycle_in_graph_max_iterations():
 def test_that_outputs_cache_is_set_to_false_in_cycle():
     chat_input = ChatInput(_id="chat_input")
     router = ConditionalRouterComponent(_id="router")
-    chat_input.set(input_value=router.false_response)
+    # Use router's message output instead of false_response
+    chat_input.set(input_value=router.message)
     concat_component = Concatenate(_id="concatenate")
     concat_component.set(text=chat_input.message_response)
     router.set(
@@ -142,7 +143,8 @@ def test_that_outputs_cache_is_set_to_false_in_cycle():
         assert output.cache is True
 
 
-@pytest.mark.api_key_required
+@pytest.mark.skip(reason="Cycles now require a LoopComponent to work")
+@pytest.mark.skipif(not os.getenv("OPENAI_API_KEY"), reason="OpenAI API key required")
 def test_updated_graph_with_prompts():
     # Chat input initialization
     chat_input = ChatInput(_id="chat_input").set(input_value="bacon")
@@ -207,10 +209,11 @@ def test_updated_graph_with_prompts():
     assert len(snapshots) > 2, "Graph should have more than one snapshot"
     # Extract the vertex IDs for analysis
     results_ids = [result.vertex.id for result in results if hasattr(result, "vertex")]
-    assert "chat_output_1" in results_ids, f"Expected outputs not in results: {results_ids}"
+    assert "chat_output_1" in results_ids, f"Expected outputs not in results: {results_ids}. Snapshots: {snapshots}"
 
 
-@pytest.mark.api_key_required
+@pytest.mark.skip(reason="Cycles now require a LoopComponent to work")
+@pytest.mark.skipif(not os.getenv("OPENAI_API_KEY"), reason="OpenAI API key required")
 def test_updated_graph_with_max_iterations():
     # Chat input initialization
     chat_input = ChatInput(_id="chat_input").set(input_value="bacon")
@@ -275,7 +278,7 @@ def test_updated_graph_with_max_iterations():
     assert len(snapshots) > 2, "Graph should have more than one snapshot"
     # Extract the vertex IDs for analysis
     results_ids = [result.vertex.id for result in results if hasattr(result, "vertex")]
-    assert "chat_output_1" in results_ids, f"Expected outputs not in results: {results_ids}"
+    assert "chat_output_1" in results_ids, f"Expected outputs not in results: {results_ids}. Snapshots: {snapshots}"
 
 
 def test_conditional_router_max_iterations():

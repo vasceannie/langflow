@@ -1,58 +1,48 @@
 import { expect, test } from "@playwright/test";
+import { addLegacyComponents } from "../../utils/add-legacy-components";
+import { awaitBootstrapTest } from "../../utils/await-bootstrap-test";
+import { zoomOut } from "../../utils/zoom-out";
 
 test(
   "should be able to see output preview from grouped components and connect components with a single click",
   { tag: ["@release", "@workspace", "@components"] },
   async ({ page }) => {
-    await page.goto("/");
-
-    let modalCount = 0;
     const randomName = Math.random().toString(36).substring(2);
     const secondRandomName = Math.random().toString(36).substring(2);
     const thirdRandomName = Math.random().toString(36).substring(2);
 
-    try {
-      const modalTitleElement = page?.getByTestId("modal-title");
-      if (modalTitleElement) {
-        modalCount = await modalTitleElement.count();
-      }
-    } catch (error) {
-      modalCount = 0;
-    }
-
-    while (modalCount === 0) {
-      await page.getByText("New Flow", { exact: true }).click();
-      await page.waitForSelector('[data-testid="modal-title"]', {
-        timeout: 3000,
-      });
-      modalCount = await page.getByTestId("modal-title")?.count();
-    }
-
-    await page.waitForSelector('[data-testid="blank-flow"]', {
-      timeout: 30000,
-    });
+    await awaitBootstrapTest(page);
 
     await page.getByTestId("blank-flow").click();
 
+    await addLegacyComponents(page);
+
     await page.getByTestId("sidebar-search-input").click();
     await page.getByTestId("sidebar-search-input").fill("text input");
-    await page.waitForSelector('[data-testid="inputsText Input"]', {
+    await page.waitForSelector('[data-testid="input_outputText Input"]', {
       timeout: 3000,
     });
 
     await page
-      .getByTestId("inputsText Input")
+      .getByTestId("input_outputText Input")
       .dragTo(page.locator('//*[@id="react-flow-id"]'), {});
 
-    await page.getByTestId("zoom_out").click();
-    await page.getByTestId("zoom_out").click();
-    await page.getByTestId("zoom_out").click();
-    await page.getByTestId("zoom_out").click();
+    await zoomOut(page, 4);
+
+    await page.waitForTimeout(500);
 
     await page
-      .getByTestId("inputsText Input")
+      .getByTestId("input_outputText Input")
       .dragTo(page.locator('//*[@id="react-flow-id"]'), {
         targetPosition: { x: 500, y: 150 },
+      });
+
+    await page.waitForTimeout(500);
+
+    await page
+      .getByTestId("input_outputText Input")
+      .dragTo(page.locator('//*[@id="react-flow-id"]'), {
+        targetPosition: { x: 670, y: 200 },
       });
 
     await page.getByTestId("sidebar-search-input").click();
@@ -68,21 +58,29 @@ test(
         targetPosition: { x: 10, y: 10 },
       });
 
+    await page.waitForTimeout(500);
+
+    await page.getByTestId("popover-anchor-input-delimiter").fill("-");
+
     await page
       .getByTestId("processingCombine Text")
       .dragTo(page.locator('//*[@id="react-flow-id"]'), {
         targetPosition: { x: 200, y: 10 },
       });
 
+    await page.waitForTimeout(500);
+
+    await page.getByTestId("popover-anchor-input-delimiter").last().fill("-");
+
     await page.getByTestId("sidebar-search-input").click();
     await page.getByTestId("sidebar-search-input").fill("text");
 
-    await page.waitForSelector('[data-testid="outputsText Output"]', {
+    await page.waitForSelector('[data-testid="input_outputText Output"]', {
       timeout: 3000,
     });
 
     await page
-      .getByTestId("outputsText Output")
+      .getByTestId("input_outputText Output")
       .dragTo(page.locator('//*[@id="react-flow-id"]'), {
         targetPosition: { x: 10, y: 400 },
       });
@@ -93,13 +91,13 @@ test(
     await elementCombineTextOutput0.click();
 
     const blockedHandle = page
-      .getByTestId("div-handle-textinput-shownode-text-right")
+      .getByTestId("div-handle-textinput-shownode-output text-right")
       .first();
     const secondBlockedHandle = page
       .getByTestId("div-handle-combinetext-shownode-combined text-right")
-      .nth(3);
+      .nth(1);
     const thirdBlockedHandle = page
-      .getByTestId("div-handle-textoutput-shownode-text-right")
+      .getByTestId("div-handle-textoutput-shownode-output text-right")
       .first();
 
     const hasGradient = await blockedHandle?.evaluate((el) => {
@@ -131,24 +129,18 @@ test(
       .getByTestId("div-handle-combinetext-shownode-second text-left")
       .first();
     const fourthUnlockedHandle = page
-      .getByTestId("div-handle-textoutput-shownode-text-left")
+      .getByTestId("div-handle-textoutput-shownode-inputs-left")
       .first();
 
     const hasGradientUnlocked = await unlockedHandle?.evaluate((el) => {
       const style = window.getComputedStyle(el);
-      return (
-        style.backgroundImage.includes("conic-gradient") &&
-        style.backgroundImage.includes("rgb(79, 70, 229)")
-      );
+      return style.backgroundColor === "rgb(79, 70, 229)";
     });
 
     const secondHasGradientUnlocked = await secondUnlockedHandle?.evaluate(
       (el) => {
         const style = window.getComputedStyle(el);
-        return (
-          style.backgroundImage.includes("conic-gradient") &&
-          style.backgroundImage.includes("rgb(79, 70, 229)")
-        );
+        return style.backgroundColor === "rgb(79, 70, 229)";
       },
     );
 
@@ -160,10 +152,7 @@ test(
     const fourthHasGradientUnlocked = await fourthUnlockedHandle?.evaluate(
       (el) => {
         const style = window.getComputedStyle(el);
-        return (
-          style.backgroundImage.includes("conic-gradient") &&
-          style.backgroundImage.includes("rgb(79, 70, 229)")
-        );
+        return style.backgroundColor === "rgb(79, 70, 229)";
       },
     );
 
@@ -177,22 +166,25 @@ test(
       .nth(1);
     await elementCombineTextInput1.click();
 
+    await page.getByTitle("fit view").click();
+
+    await zoomOut(page, 2);
+
     await page
       .getByTestId("title-Combine Text")
       .first()
-      .click({ modifiers: ["Control"] });
-    await page
-      .getByTestId("title-delimiter")
-      .last()
-      .click({ modifiers: ["Control"] });
+      .click({ modifiers: ["ControlOrMeta"] });
 
-    await page.getByRole("button", { name: "Group" }).click();
+    await page.waitForSelector('[data-testid="group-node"]', {
+      timeout: 3000,
+      state: "visible",
+    });
 
-    await page.getByTitle("fit view").click();
+    await page.getByTestId("group-node").click();
 
-    //connection 2
+    //connection 1
     const elementTextOutput0 = page
-      .getByTestId("handle-textinput-shownode-text-right")
+      .getByTestId("handle-textinput-shownode-output text-right")
       .nth(0);
     await elementTextOutput0.click();
     const elementGroupInput0 = page.getByTestId(
@@ -200,16 +192,27 @@ test(
     );
     await elementGroupInput0.click();
 
-    //connection 3
+    //connection 2
     const elementTextOutput1 = page
-      .getByTestId("handle-textinput-shownode-text-right")
+      .getByTestId("handle-textinput-shownode-output text-right")
       .nth(2);
     await elementTextOutput1.click();
-
     const elementGroupInput1 = page
       .getByTestId("handle-groupnode-shownode-second text-left")
-      .nth(1);
+      .first();
     await elementGroupInput1.click();
+
+    //connection 3
+    const elementTextOutput2 = page
+      .getByTestId("handle-textinput-shownode-output text-right")
+      .nth(1);
+    await elementTextOutput2.click();
+
+    const elementGroupInput2 = page
+      .getByTestId("handle-groupnode-shownode-second text-left")
+      .nth(1)
+      .last();
+    await elementGroupInput2.click();
 
     //connection 4
     const elementGroupOutput = page
@@ -217,7 +220,7 @@ test(
       .nth(0);
     await elementGroupOutput.click();
     const elementTextOutputInput = page
-      .getByTestId("handle-textoutput-shownode-text-left")
+      .getByTestId("handle-textoutput-shownode-inputs-left")
       .nth(0);
 
     await elementTextOutputInput.click();
@@ -231,31 +234,22 @@ test(
 
     await page
       .getByPlaceholder("Type something...", { exact: true })
-      .nth(4)
-      .fill(thirdRandomName);
-
-    await page
-      .getByPlaceholder("Type something...", { exact: true })
-      .nth(3)
-      .fill("-");
-
-    await page
-      .getByPlaceholder("Type something...", { exact: true })
       .nth(2)
-      .fill("-");
+      .fill(thirdRandomName);
 
     await page.getByTestId("button_run_text output").last().click();
 
     await page.waitForSelector("text=built successfully", { timeout: 30000 });
 
-    await page.getByText("built successfully").last().click({
-      timeout: 15000,
-    });
-
     expect(
-      await page.getByTestId("output-inspection-combined text").first(),
+      await page
+        .getByTestId("output-inspection-combined text-groupnode")
+        .first(),
     ).not.toBeDisabled();
-    await page.getByTestId("output-inspection-combined text").first().click();
+    await page
+      .getByTestId("output-inspection-combined text-groupnode")
+      .first()
+      .click();
 
     await page.getByText("Component Output").isVisible();
 

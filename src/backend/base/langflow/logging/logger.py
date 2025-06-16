@@ -15,14 +15,14 @@ from loguru._file_sink import FileSink
 from loguru._simple_sinks import AsyncSink
 from platformdirs import user_cache_dir
 from rich.logging import RichHandler
-from typing_extensions import NotRequired
+from typing_extensions import NotRequired, override
 
 from langflow.settings import DEV
 
-VALID_LOG_LEVELS = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+VALID_LOG_LEVELS = ["TRACE", "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
 # Human-readable
 DEFAULT_LOG_FORMAT = (
-    "<green>{time:YYYY-MM-DD HH:mm:ss}</green> - <level>" "{level: <8}</level> - {module} - <level>{message}</level>"
+    "<green>{time:YYYY-MM-DD HH:mm:ss}</green> - <level>{level: <8}</level> - {module} - <level>{message}</level>"
 )
 
 
@@ -159,6 +159,7 @@ class AsyncFileSink(AsyncSink):
         self._sink = FileSink(
             path=file,
             rotation="10 MB",  # Log rotation based on file size
+            delay=True,
         )
         super().__init__(self.write_async, None, ErrorInterceptor(_defaults.LOGURU_CATCH, -1))
 
@@ -230,17 +231,21 @@ def configure(
 
         if log_format is None or not is_valid_log_format(log_format):
             log_format = DEFAULT_LOG_FORMAT
-
-        # Configure loguru to use RichHandler
-        logger.configure(
-            handlers=[
-                {
-                    "sink": RichHandler(rich_tracebacks=True, markup=True),
-                    "format": log_format,
-                    "level": log_level.upper(),
-                }
-            ]
-        )
+        # pretty print to rich stdout development-friendly but poor performance, It's better for debugger.
+        # suggest directly print to stdout in production
+        log_stdout_pretty = os.getenv("LANGFLOW_PRETTY_LOGS", "true").lower() == "true"
+        if log_stdout_pretty:
+            logger.configure(
+                handlers=[
+                    {
+                        "sink": RichHandler(rich_tracebacks=True, markup=True),
+                        "format": log_format,
+                        "level": log_level.upper(),
+                    }
+                ]
+            )
+        else:
+            logger.add(sys.stdout, level=log_level.upper(), format=log_format, backtrace=True, diagnose=True)
 
         if not log_file:
             cache_dir = Path(user_cache_dir("langflow"))
@@ -248,8 +253,6 @@ def configure(
             log_file = cache_dir / "langflow.log"
             logger.debug(f"Log file: {log_file}")
         try:
-            log_file.parent.mkdir(parents=True, exist_ok=True)
-
             logger.add(
                 sink=AsyncFileSink(log_file) if async_file else log_file,
                 level=log_level.upper(),
@@ -286,6 +289,7 @@ class InterceptHandler(logging.Handler):
     See https://loguru.readthedocs.io/en/stable/overview.html#entirely-compatible-with-standard-logging.
     """
 
+    @override
     def emit(self, record) -> None:
         # Get corresponding Loguru level if it exists
         try:

@@ -2,9 +2,12 @@ from langchain.agents import create_tool_calling_agent
 from langchain_core.prompts import ChatPromptTemplate
 
 from langflow.base.agents.agent import LCToolsAgentComponent
-from langflow.inputs import MessageTextInput
-from langflow.inputs.inputs import DataInput, HandleInput
-from langflow.schema import Data
+from langflow.inputs.inputs import (
+    DataInput,
+    HandleInput,
+    MessageTextInput,
+)
+from langflow.schema.data import Data
 
 
 class ToolCallingAgentComponent(LCToolsAgentComponent):
@@ -42,7 +45,7 @@ class ToolCallingAgentComponent(LCToolsAgentComponent):
 
     def create_agent_runnable(self):
         messages = [
-            ("system", self.system_prompt),
+            ("system", "{system_prompt}"),
             ("placeholder", "{chat_history}"),
             ("human", "{input}"),
             ("placeholder", "{agent_scratchpad}"),

@@ -1,7 +1,7 @@
-from langflow.custom import Component
+from langflow.custom.custom_component.component import Component
 from langflow.io import MessageInput
 from langflow.schema.message import Message
-from langflow.template import Output
+from langflow.template.field.base import Output
 
 
 class PassMessageComponent(Component):
@@ -9,12 +9,14 @@ class PassMessageComponent(Component):
     description = "Forwards the input message, unchanged."
     name = "Pass"
     icon = "arrow-right"
+    legacy: bool = True
 
     inputs = [
         MessageInput(
             name="input_message",
             display_name="Input Message",
             info="The message to be passed forward.",
+            required=True,
         ),
         MessageInput(
             name="ignored_message",

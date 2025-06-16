@@ -1,16 +1,13 @@
-import { Page, test } from "@playwright/test";
+import { test } from "@playwright/test";
 import * as dotenv from "dotenv";
 import path from "path";
-
-async function zoomOut(page: Page, times: number = 4) {
-  for (let i = 0; i < times; i++) {
-    await page.getByTestId("zoom_out").click();
-  }
-}
+import { addLegacyComponents } from "../../utils/add-legacy-components";
+import { awaitBootstrapTest } from "../../utils/await-bootstrap-test";
+import { zoomOut } from "../../utils/zoom-out";
 
 test(
   "should create a flow with decision",
-  { tag: ["@release", "@components"] },
+  { tag: ["@release", "@components", "@workflow"] },
 
   async ({ page }) => {
     test.skip(
@@ -20,62 +17,46 @@ test(
     if (!process.env.CI) {
       dotenv.config({ path: path.resolve(__dirname, "../../.env") });
     }
-    await page.goto("/");
-    await page.waitForSelector('[data-testid="mainpage_title"]', {
-      timeout: 30000,
-    });
-    await page.waitForSelector('[id="new-project-btn"]', {
-      timeout: 30000,
-    });
-    let modalCount = 0;
-    try {
-      const modalTitleElement = await page?.getByTestId("modal-title");
-      if (modalTitleElement) {
-        modalCount = await modalTitleElement.count();
-      }
-    } catch (error) {
-      modalCount = 0;
-    }
-    while (modalCount === 0) {
-      await page.getByText("New Flow", { exact: true }).click();
-      await page.waitForSelector('[data-testid="modal-title"]', {
-        timeout: 3000,
-      });
-      modalCount = await page.getByTestId("modal-title")?.count();
-    }
+    await awaitBootstrapTest(page);
+
     await page.waitForSelector('[data-testid="blank-flow"]', {
       timeout: 30000,
     });
     await page.getByTestId("blank-flow").click();
 
-    await page.getByTestId("sidebar-options-trigger").click();
-    await page
-      .getByTestId("sidebar-legacy-switch")
-      .isVisible({ timeout: 5000 });
-    await page.getByTestId("sidebar-legacy-switch").click();
+    await addLegacyComponents(page);
 
     //---------------------------------- CHAT INPUT
     await page.getByTestId("sidebar-search-input").click();
     await page.getByTestId("sidebar-search-input").fill("chat input");
-    await page.waitForSelector('[data-testid="inputsChat Input"]', {
-      timeout: 500,
+    await page.waitForSelector('[data-testid="input_outputChat Input"]', {
+      timeout: 2000,
     });
+
+    await zoomOut(page, 6);
+
     await page
-      .getByTestId("inputsChat Input")
-      .dragTo(page.locator('//*[@id="react-flow-id"]'));
-    await zoomOut(page);
+      .getByTestId("input_outputChat Input")
+      .dragTo(page.locator('//*[@id="react-flow-id"]'), {
+        targetPosition: { x: 100, y: 100 },
+      });
 
     //---------------------------------- CREATE LIST
     await page.getByTestId("sidebar-search-input").click();
     await page.getByTestId("sidebar-search-input").fill("list");
     await page.waitForSelector('[data-testid="helpersCreate List"]', {
-      timeout: 500,
+      timeout: 2000,
     });
     await page
       .getByTestId("helpersCreate List")
       .dragTo(page.locator('//*[@id="react-flow-id"]'), {
-        targetPosition: { x: 100, y: 100 },
+        targetPosition: { x: 200, y: 100 },
       });
+
+    await page.waitForSelector('[data-testid="input-list-plus-btn_texts-0"]', {
+      timeout: 3000,
+      state: "attached",
+    });
 
     await page.getByTestId("input-list-plus-btn_texts-0").first().click();
     await page.getByTestId("input-list-plus-btn_texts-0").first().click();
@@ -95,7 +76,7 @@ test(
     await page
       .getByTestId("helpersCreate List")
       .dragTo(page.locator('//*[@id="react-flow-id"]'), {
-        targetPosition: { x: 300, y: 300 },
+        targetPosition: { x: 350, y: 100 },
       });
     await page.getByTestId("input-list-plus-btn_texts-0").last().click();
     await page.getByTestId("input-list-plus-btn_texts-0").last().click();
@@ -111,128 +92,128 @@ test(
     await page.getByTestId("inputlist_str_texts_2").last().fill("not cool..");
     //---------------------------------- PARSE DATA
     await page.getByTestId("sidebar-search-input").click();
-    await page.getByTestId("sidebar-search-input").fill("parse data");
-    await page.waitForSelector('[data-testid="processingParse Data"]', {
-      timeout: 500,
+    await page.getByTestId("sidebar-search-input").fill("data to message");
+    await page.waitForSelector('[data-testid="processingData to Message"]', {
+      timeout: 2000,
     });
     await page
-      .getByTestId("processingParse Data")
+      .getByTestId("processingData to Message")
       .dragTo(page.locator('//*[@id="react-flow-id"]'), {
-        targetPosition: { x: 350, y: 100 },
+        targetPosition: { x: 500, y: 100 },
       });
-    await zoomOut(page, 1);
     await page
-      .getByTestId("processingParse Data")
+      .getByTestId("processingData to Message")
       .dragTo(page.locator('//*[@id="react-flow-id"]'), {
-        targetPosition: { x: 50, y: 300 },
+        targetPosition: { x: 650, y: 100 },
       });
-    await zoomOut(page, 2);
 
     //---------------------------------- PASS
     await page.getByTestId("sidebar-search-input").click();
     await page.getByTestId("sidebar-search-input").fill("pass");
     await page.waitForSelector('[data-testid="logicPass"]', {
-      timeout: 500,
+      timeout: 2000,
     });
     await page
       .getByTestId("logicPass")
       .dragTo(page.locator('//*[@id="react-flow-id"]'), {
-        targetPosition: { x: 400, y: 100 },
+        targetPosition: { x: 800, y: 100 },
       });
     await page.waitForSelector('[data-testid="logicPass"]', {
-      timeout: 500,
+      timeout: 2000,
     });
     //---------------------------------- PASS
     await page.getByTestId("sidebar-search-input").click();
     await page.getByTestId("sidebar-search-input").fill("pass");
     await page.waitForSelector('[data-testid="logicPass"]', {
-      timeout: 500,
+      timeout: 2000,
     });
     await page
       .getByTestId("logicPass")
       .dragTo(page.locator('//*[@id="react-flow-id"]'), {
-        targetPosition: { x: 600, y: 200 },
+        targetPosition: { x: 50, y: 200 },
       });
     await page.waitForSelector('[data-testid="logicPass"]', {
-      timeout: 500,
+      timeout: 2000,
     });
     //---------------------------------- PASS
     await page.getByTestId("sidebar-search-input").click();
     await page.getByTestId("sidebar-search-input").fill("pass");
     await page.waitForSelector('[data-testid="logicPass"]', {
-      timeout: 500,
+      timeout: 2000,
     });
     await page
       .getByTestId("logicPass")
       .dragTo(page.locator('//*[@id="react-flow-id"]'), {
-        targetPosition: { x: 650, y: 350 },
+        targetPosition: { x: 200, y: 300 },
       });
     await page.waitForSelector('[data-testid="logicPass"]', {
-      timeout: 500,
+      timeout: 2000,
     });
-    zoomOut(page, 2);
     //---------------------------------- PROMPT
     await page.getByTestId("sidebar-search-input").click();
     await page.getByTestId("sidebar-search-input").fill("prompt");
     await page.waitForSelector('[data-testid="promptsPrompt"]', {
-      timeout: 500,
+      timeout: 2000,
     });
     await page
       .getByTestId("promptsPrompt")
       .dragTo(page.locator('//*[@id="react-flow-id"]'), {
-        targetPosition: { x: 50, y: 150 },
+        targetPosition: { x: 350, y: 300 },
       });
 
     //---------------------------------- OPENAI
     await page.getByTestId("sidebar-search-input").click();
     await page.getByTestId("sidebar-search-input").fill("openai");
-    await page.waitForSelector('[data-testid="modelsOpenAI"]', {
-      timeout: 500,
-    });
+    await page.waitForSelector(
+      '[data-testid="languagemodels_openai_draggable"]',
+      {
+        timeout: 2000,
+      },
+    );
     await page
-      .getByTestId("modelsOpenAI")
+      .getByTestId("languagemodelsOpenAI")
       .dragTo(page.locator('//*[@id="react-flow-id"]'), {
-        targetPosition: { x: 50, y: 300 },
+        targetPosition: { x: 500, y: 300 },
       });
 
     //---------------------------------- CONDITIONAL ROUTER
     await page.getByTestId("sidebar-search-input").click();
     await page.getByTestId("sidebar-search-input").fill("if else");
     await page.waitForSelector('[data-testid="logicIf-Else"]', {
-      timeout: 500,
+      timeout: 2000,
     });
     await page
       .getByTestId("logicIf-Else")
       .dragTo(page.locator('//*[@id="react-flow-id"]'), {
-        targetPosition: { x: 750, y: 150 },
+        targetPosition: { x: 650, y: 300 },
       });
     //---------------------------------- CHAT OUTPUT
     await page.getByTestId("sidebar-search-input").click();
     await page.getByTestId("sidebar-search-input").fill("chat output");
-    await page.waitForSelector('[data-testid="outputsChat Output"]', {
-      timeout: 500,
+    await page.waitForSelector('[data-testid="input_outputChat Output"]', {
+      timeout: 2000,
     });
     await page
-      .getByTestId("outputsChat Output")
+      .getByTestId("input_outputChat Output")
       .dragTo(page.locator('//*[@id="react-flow-id"]'), {
-        targetPosition: { x: 100, y: 75 },
+        targetPosition: { x: 800, y: 300 },
       });
-    await page.waitForSelector('[data-testid="outputsChat Output"]', {
-      timeout: 500,
+    await page.waitForSelector('[data-testid="input_outputChat Output"]', {
+      timeout: 2000,
     });
     //---------------------------------- CHAT OUTPUT
     await page.getByTestId("sidebar-search-input").click();
     await page.getByTestId("sidebar-search-input").fill("chat output");
-    await page.waitForSelector('[data-testid="outputsChat Output"]', {
-      timeout: 500,
+    await page.waitForSelector('[data-testid="input_outputChat Output"]', {
+      timeout: 2000,
     });
     await page
-      .getByTestId("outputsChat Output")
+      .getByTestId("input_outputChat Output")
       .dragTo(page.locator('//*[@id="react-flow-id"]'), {
-        targetPosition: { x: 250, y: 75 },
+        targetPosition: { x: 800, y: 400 },
       });
-    await page.waitForSelector('[data-testid="outputsChat Output"]', {
-      timeout: 500,
+    await page.waitForSelector('[data-testid="input_outputChat Output"]', {
+      timeout: 2000,
     });
     //----------------------------------
     await page.getByTestId("fit_view").click();
@@ -260,14 +241,14 @@ test(
       .click();
     await page
       .getByTestId("handle-createlist-shownode-data list-right")
-      .nth(2)
+      .nth(1)
       .click();
     await page
       .getByTestId("handle-parsedata-shownode-data-left")
       .nth(1)
       .click();
     await page
-      .getByTestId("handle-chatinput-shownode-message-right")
+      .getByTestId("handle-chatinput-noshownode-chat message-source")
       .nth(0)
       .click();
     await page
@@ -275,7 +256,7 @@ test(
       .nth(2)
       .click();
     await page
-      .getByTestId("handle-parsedata-shownode-text-right")
+      .getByTestId("handle-parsedata-shownode-message-right")
       .nth(0)
       .click();
     //quebrando aqui
@@ -284,8 +265,8 @@ test(
       .nth(0)
       .click();
     await page
-      .getByTestId("handle-parsedata-shownode-text-right")
-      .nth(2)
+      .getByTestId("handle-parsedata-shownode-message-right")
+      .nth(1)
       .click();
     await page
       .getByTestId("handle-prompt-shownode-false_examples-left")
@@ -293,14 +274,14 @@ test(
       .click();
     await page
       .getByTestId("handle-pass-shownode-output message-right")
-      .nth(4)
+      .nth(2)
       .click();
     await page
       .getByTestId("handle-prompt-shownode-user_message-left")
       .nth(0)
       .click();
     await page
-      .getByTestId("handle-prompt-shownode-prompt message-right")
+      .getByTestId("handle-prompt-shownode-prompt-right")
       .first()
       .click();
     await page
@@ -308,7 +289,7 @@ test(
       .nth(0)
       .click();
     await page
-      .getByTestId("handle-openaimodel-shownode-text-right")
+      .getByTestId("handle-openaimodel-shownode-model response-right")
       .nth(0)
       .click();
     await page
@@ -332,6 +313,7 @@ test(
       .fill("You're Sad! 🥲");
     await page.getByTestId("showignored_message").last().click();
     await page.getByText("Close").last().click();
+
     await page
       .getByTestId("handle-conditionalrouter-shownode-true-right")
       .nth(0)
@@ -350,10 +332,10 @@ test(
       .click();
     await page
       .getByTestId("handle-pass-shownode-output message-right")
-      .nth(2)
+      .nth(1)
       .click();
     await page
-      .getByTestId("handle-chatoutput-shownode-text-left")
+      .getByTestId("handle-chatoutput-noshownode-inputs-target")
       .nth(0)
       .click();
     await page
@@ -361,7 +343,7 @@ test(
       .nth(0)
       .click();
     await page
-      .getByTestId("handle-chatoutput-shownode-text-left")
+      .getByTestId("handle-chatoutput-noshownode-inputs-target")
       .nth(1)
       .click();
     const apiKeyInput = page.getByTestId("popover-anchor-input-api_key");
@@ -372,7 +354,7 @@ test(
     await page.getByTestId("dropdown_str_model_name").click();
     await page.getByTestId("gpt-4o-1-option").click();
     await page.getByTestId("fit_view").click();
-    await page.getByText("Playground", { exact: true }).last().click();
+    await page.getByRole("button", { name: "Playground", exact: true }).click();
     await page.waitForSelector('[data-testid="input-chat-playground"]', {
       timeout: 100000,
     });

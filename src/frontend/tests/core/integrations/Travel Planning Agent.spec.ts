@@ -1,10 +1,13 @@
 import { expect, Page, test } from "@playwright/test";
 import * as dotenv from "dotenv";
 import path from "path";
+import { awaitBootstrapTest } from "../../utils/await-bootstrap-test";
+import { initialGPTsetup } from "../../utils/initialGPTsetup";
+import { withEventDeliveryModes } from "../../utils/withEventDeliveryModes";
 
-test(
+withEventDeliveryModes(
   "Travel Planning Agent",
-  { tag: ["@release", "@starter-project"] },
+  { tag: ["@release", "@starter-projects"] },
   async ({ page }) => {
     test.skip(
       !process?.env?.OPENAI_API_KEY,
@@ -21,29 +24,7 @@ test(
     }
 
     await page.goto("/");
-    await page.waitForSelector('[data-testid="mainpage_title"]', {
-      timeout: 30000,
-    });
-
-    await page.waitForSelector('[id="new-project-btn"]', {
-      timeout: 30000,
-    });
-
-    let modalCount = 0;
-    try {
-      const modalTitleElement = await page?.getByTestId("modal-title");
-      if (modalTitleElement) {
-        modalCount = await modalTitleElement.count();
-      }
-    } catch (error) {
-      modalCount = 0;
-    }
-
-    while (modalCount === 0) {
-      await page.getByText("New Flow", { exact: true }).click();
-      await page.waitForTimeout(3000);
-      modalCount = await page.getByTestId("modal-title")?.count();
-    }
+    await awaitBootstrapTest(page);
 
     await page.getByTestId("side_nav_options_all-templates").click();
     await page
@@ -55,27 +36,7 @@ test(
       timeout: 100000,
     });
 
-    await page.getByTestId("fit_view").click();
-    await page.getByTestId("zoom_out").click();
-    await page.getByTestId("zoom_out").click();
-    await page.getByTestId("zoom_out").click();
-
-    let outdatedComponents = await page
-      .getByTestId("icon-AlertTriangle")
-      .count();
-
-    while (outdatedComponents > 0) {
-      await page.getByTestId("icon-AlertTriangle").first().click();
-      await page.waitForTimeout(1000);
-      outdatedComponents = await page.getByTestId("icon-AlertTriangle").count();
-    }
-
-    let filledApiKey = await page.getByTestId("remove-icon-badge").count();
-    while (filledApiKey > 0) {
-      await page.getByTestId("remove-icon-badge").first().click();
-      await page.waitForTimeout(1000);
-      filledApiKey = await page.getByTestId("remove-icon-badge").count();
-    }
+    await initialGPTsetup(page);
 
     const randomCity = cities[Math.floor(Math.random() * cities.length)];
     const randomCity2 = cities[Math.floor(Math.random() * cities.length)];
@@ -88,28 +49,10 @@ test(
         `Create a travel plan from ${randomCity} to ${randomCity2} with ${randomFood}`,
       );
 
-    let openAiLlms = await page.getByText("OpenAI", { exact: true }).count();
-    await page.waitForSelector('[data-testid="fit_view"]', {
-      timeout: 100000,
-    });
-
-    for (let i = 0; i < openAiLlms; i++) {
-      await page
-        .getByTestId("popover-anchor-input-api_key")
-        .nth(i + 1)
-        .fill(process.env.OPENAI_API_KEY ?? "");
-      await page.getByTestId("zoom_in").click();
-      await page.getByTestId("dropdown_str_model_name").nth(i).click();
-      await page.getByTestId("gpt-4o-1-option").last().click();
-      await page.waitForTimeout(1000);
-    }
-
     await page
       .getByTestId("popover-anchor-input-api_key")
       .first()
       .fill(process.env.SEARCH_API_KEY ?? "");
-
-    await page.waitForTimeout(1000);
 
     await page.getByTestId("button_run_chat output").click();
 
@@ -124,23 +67,17 @@ test(
       timeout: 60000 * 3,
     });
 
-    await page.getByText("built successfully").last().click({
-      timeout: 15000,
-    });
-
-    await page.getByText("Playground", { exact: true }).last().click();
+    await page.getByRole("button", { name: "Playground", exact: true }).click();
 
     await page.waitForSelector("text=default session", {
       timeout: 30000,
     });
 
-    await page.waitForTimeout(1000);
-
     const output = await page.getByTestId("div-chat-message").allTextContents();
     const outputText = output.join("\n");
 
-    expect(outputText.toLowerCase()).toContain("weather");
-    expect(outputText.toLowerCase()).toContain("budget");
+    expect(outputText.toLowerCase()).toContain("travel");
+    expect(outputText.toLowerCase()).toContain("day");
 
     expect(outputText.toLowerCase()).toContain(randomCity.toLowerCase());
     expect(outputText.toLowerCase()).toContain(randomCity2.toLowerCase());

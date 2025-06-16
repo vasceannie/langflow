@@ -1,11 +1,10 @@
 # Add helper functions for each event type
-import asyncio
 from collections.abc import AsyncIterator
 from time import perf_counter
 from typing import Any, Protocol
 
 from langchain_core.agents import AgentFinish
-from langchain_core.messages import BaseMessage
+from langchain_core.messages import AIMessageChunk, BaseMessage
 from typing_extensions import TypedDict
 
 from langflow.schema.content_block import ContentBlock
@@ -15,9 +14,17 @@ from langflow.schema.message import Message
 
 
 class ExceptionWithMessageError(Exception):
-    def __init__(self, agent_message: Message):
+    def __init__(self, agent_message: Message, message: str):
         self.agent_message = agent_message
-        super().__init__()
+        super().__init__(message)
+        self.message = message
+
+    def __str__(self):
+        return (
+            f"Agent message: {self.agent_message.text} \nError: {self.message}."
+            if self.agent_message.error or self.agent_message.text
+            else f"{self.message}."
+        )
 
 
 class InputDict(TypedDict):
@@ -26,16 +33,8 @@ class InputDict(TypedDict):
 
 
 def _build_agent_input_text_content(agent_input_dict: InputDict) -> str:
-    chat_history = agent_input_dict.get("chat_history", [])
-    messages = [
-        f"**{message.type.upper()}**: {message.content}"
-        for message in chat_history
-        if isinstance(message, BaseMessage) and message.content
-    ]
     final_input = agent_input_dict.get("input", "")
-    if messages and final_input not in messages[-1]:
-        messages.append(f"**HUMAN**: {final_input}")
-    return "  \n".join(messages)
+    return f"**Input**: {final_input}"
 
 
 def _calculate_duration(start_time: float) -> int:
@@ -53,7 +52,7 @@ def _calculate_duration(start_time: float) -> int:
     return result
 
 
-def handle_on_chain_start(
+async def handle_on_chain_start(
     event: dict[str, Any], agent_message: Message, send_message_method: SendMessageFunctionType, start_time: float
 ) -> tuple[Message, float]:
     # Create content blocks if they don't exist
@@ -75,23 +74,47 @@ def handle_on_chain_start(
                 header={"title": "Input", "icon": "MessageSquare"},
             )
             agent_message.content_blocks[0].contents.append(text_content)
-            agent_message = send_message_method(message=agent_message)
+            agent_message = await send_message_method(message=agent_message)
             start_time = perf_counter()
     return agent_message, start_time
 
 
 def _extract_output_text(output: str | list) -> str:
     if isinstance(output, str):
-        text = output
-    elif isinstance(output, list) and len(output) == 1 and isinstance(output[0], dict) and "text" in output[0]:
-        text = output[0]["text"]
-    else:
+        return output
+    if isinstance(output, list) and len(output) == 0:
+        return ""
+    if not isinstance(output, list) or len(output) != 1:
         msg = f"Output is not a string or list of dictionaries with 'text' key: {output}"
-        raise ValueError(msg)
-    return text
+        raise TypeError(msg)
+
+    item = output[0]
+    if isinstance(item, str):
+        return item
+    if isinstance(item, dict):
+        if "text" in item:
+            return item["text"]
+        # If the item's type is "tool_use", return an empty string.
+        # This likely indicates that "tool_use" outputs are not meant to be displayed as text.
+        if item.get("type") == "tool_use":
+            return ""
+    if isinstance(item, dict):
+        if "text" in item:
+            return item["text"]
+        # If the item's type is "tool_use", return an empty string.
+        # This likely indicates that "tool_use" outputs are not meant to be displayed as text.
+        if item.get("type") == "tool_use":
+            return ""
+        # This is a workaround to deal with function calling by Anthropic
+        # since the same data comes in the tool_output we don't need to stream it here
+        # although it would be nice to
+        if "partial_json" in item:
+            return ""
+    msg = f"Output is not a string or list of dictionaries with 'text' key: {output}"
+    raise TypeError(msg)
 
 
-def handle_on_chain_end(
+async def handle_on_chain_end(
     event: dict[str, Any], agent_message: Message, send_message_method: SendMessageFunctionType, start_time: float
 ) -> tuple[Message, float]:
     data_output = event["data"].get("output")
@@ -110,12 +133,12 @@ def handle_on_chain_end(
                 header={"title": "Output", "icon": "MessageSquare"},
             )
             agent_message.content_blocks[0].contents.append(text_content)
-        agent_message = send_message_method(message=agent_message)
+        agent_message = await send_message_method(message=agent_message)
         start_time = perf_counter()
     return agent_message, start_time
 
 
-def handle_on_tool_start(
+async def handle_on_tool_start(
     event: dict[str, Any],
     agent_message: Message,
     tool_blocks_map: dict[str, ToolContent],
@@ -149,12 +172,13 @@ def handle_on_tool_start(
     tool_blocks_map[tool_key] = tool_content
     agent_message.content_blocks[0].contents.append(tool_content)
 
-    agent_message = send_message_method(message=agent_message)
-    tool_blocks_map[tool_key] = agent_message.content_blocks[0].contents[-1]
+    agent_message = await send_message_method(message=agent_message)
+    if agent_message.content_blocks and agent_message.content_blocks[0].contents:
+        tool_blocks_map[tool_key] = agent_message.content_blocks[0].contents[-1]
     return agent_message, new_start_time
 
 
-def handle_on_tool_end(
+async def handle_on_tool_end(
     event: dict[str, Any],
     agent_message: Message,
     tool_blocks_map: dict[str, ToolContent],
@@ -172,13 +196,13 @@ def handle_on_tool_end(
         tool_content.duration = duration
         tool_content.header = {"title": f"Executed **{tool_content.name}**", "icon": "Hammer"}
 
-        agent_message = send_message_method(message=agent_message)
+        agent_message = await send_message_method(message=agent_message)
         new_start_time = perf_counter()  # Get new start time for next operation
         return agent_message, new_start_time
     return agent_message, start_time
 
 
-def handle_on_tool_error(
+async def handle_on_tool_error(
     event: dict[str, Any],
     agent_message: Message,
     tool_blocks_map: dict[str, ToolContent],
@@ -194,12 +218,12 @@ def handle_on_tool_error(
         tool_content.error = event["data"].get("error", "Unknown error")
         tool_content.duration = _calculate_duration(start_time)
         tool_content.header = {"title": f"Error using **{tool_content.name}**", "icon": "Hammer"}
-        agent_message = send_message_method(message=agent_message)
+        agent_message = await send_message_method(message=agent_message)
         start_time = perf_counter()
     return agent_message, start_time
 
 
-def handle_on_chain_stream(
+async def handle_on_chain_stream(
     event: dict[str, Any],
     agent_message: Message,
     send_message_method: SendMessageFunctionType,
@@ -211,13 +235,21 @@ def handle_on_chain_stream(
         if output and isinstance(output, str | list):
             agent_message.text = _extract_output_text(output)
         agent_message.properties.state = "complete"
-        agent_message = send_message_method(message=agent_message)
+        agent_message = await send_message_method(message=agent_message)
         start_time = perf_counter()
+    elif isinstance(data_chunk, AIMessageChunk):
+        output_text = _extract_output_text(data_chunk.content)
+        if output_text and isinstance(agent_message.text, str):
+            agent_message.text += output_text
+            agent_message.properties.state = "partial"
+            agent_message = await send_message_method(message=agent_message)
+        if not agent_message.text:
+            start_time = perf_counter()
     return agent_message, start_time
 
 
 class ToolEventHandler(Protocol):
-    def __call__(
+    async def __call__(
         self,
         event: dict[str, Any],
         agent_message: Message,
@@ -228,7 +260,7 @@ class ToolEventHandler(Protocol):
 
 
 class ChainEventHandler(Protocol):
-    def __call__(
+    async def __call__(
         self,
         event: dict[str, Any],
         agent_message: Message,
@@ -244,6 +276,7 @@ CHAIN_EVENT_HANDLERS: dict[str, ChainEventHandler] = {
     "on_chain_start": handle_on_chain_start,
     "on_chain_end": handle_on_chain_end,
     "on_chain_stream": handle_on_chain_stream,
+    "on_chat_model_stream": handle_on_chain_stream,
 }
 
 TOOL_EVENT_HANDLERS: dict[str, ToolEventHandler] = {
@@ -265,7 +298,7 @@ async def process_agent_events(
         agent_message.properties.icon = "Bot"
         agent_message.properties.state = "partial"
     # Store the initial message
-    agent_message = await asyncio.to_thread(send_message_method, message=agent_message)
+    agent_message = await send_message_method(message=agent_message)
     try:
         # Create a mapping of run_ids to tool contents
         tool_blocks_map: dict[str, ToolContent] = {}
@@ -273,14 +306,13 @@ async def process_agent_events(
         async for event in agent_executor:
             if event["event"] in TOOL_EVENT_HANDLERS:
                 tool_handler = TOOL_EVENT_HANDLERS[event["event"]]
-                agent_message, start_time = tool_handler(
+                agent_message, start_time = await tool_handler(
                     event, agent_message, tool_blocks_map, send_message_method, start_time
                 )
             elif event["event"] in CHAIN_EVENT_HANDLERS:
                 chain_handler = CHAIN_EVENT_HANDLERS[event["event"]]
-                agent_message, start_time = chain_handler(event, agent_message, send_message_method, start_time)
+                agent_message, start_time = await chain_handler(event, agent_message, send_message_method, start_time)
         agent_message.properties.state = "complete"
     except Exception as e:
-        raise ExceptionWithMessageError(agent_message) from e
-
-    return Message(**agent_message.model_dump())
+        raise ExceptionWithMessageError(agent_message, str(e)) from e
+    return await Message.create(**agent_message.model_dump())

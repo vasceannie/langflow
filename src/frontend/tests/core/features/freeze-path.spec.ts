@@ -1,6 +1,9 @@
-import { expect, test } from "@playwright/test";
+import { expect, Page, test } from "@playwright/test";
 import * as dotenv from "dotenv";
 import path from "path";
+import { addFlowToTestOnEmptyLangflow } from "../../utils/add-flow-to-test-on-empty-langflow";
+import { awaitBootstrapTest } from "../../utils/await-bootstrap-test";
+import { initialGPTsetup } from "../../utils/initialGPTsetup";
 
 test(
   "user must be able to freeze a path",
@@ -16,180 +19,142 @@ test(
       dotenv.config({ path: path.resolve(__dirname, "../../.env") });
     }
 
-    await page.goto("/");
-    await page.waitForSelector('[data-testid="mainpage_title"]', {
-      timeout: 30000,
-    });
+    await awaitBootstrapTest(page);
 
-    await page.waitForSelector('[id="new-project-btn"]', {
-      timeout: 30000,
-    });
+    const firstRunLangflow = await page
+      .getByTestId("empty-project-description")
+      .count();
 
-    let modalCount = 0;
-    try {
-      const modalTitleElement = await page?.getByTestId("modal-title");
-      if (modalTitleElement) {
-        modalCount = await modalTitleElement.count();
-      }
-    } catch (error) {
-      modalCount = 0;
-    }
-
-    while (modalCount === 0) {
-      await page.getByText("New Flow", { exact: true }).click();
-      await page.waitForSelector('[data-testid="modal-title"]', {
-        timeout: 3000,
-      });
-      modalCount = await page.getByTestId("modal-title")?.count();
+    if (firstRunLangflow > 0) {
+      await addFlowToTestOnEmptyLangflow(page);
     }
 
     await page.getByTestId("side_nav_options_all-templates").click();
     await page.getByRole("heading", { name: "Basic Prompting" }).click();
 
-    await page.waitForSelector('[data-testid="fit_view"]', {
-      timeout: 100000,
-    });
-
-    await page.getByTestId("fit_view").click();
-    await page.getByTestId("zoom_out").click();
-    await page.getByTestId("zoom_out").click();
-    await page.getByTestId("zoom_out").click();
-
-    let outdatedComponents = await page
-      .getByTestId("icon-AlertTriangle")
-      .count();
-
-    while (outdatedComponents > 0) {
-      await page.getByTestId("icon-AlertTriangle").first().click();
-      await page.waitForTimeout(1000);
-      outdatedComponents = await page.getByTestId("icon-AlertTriangle").count();
-    }
-
-    //remove all saved api keys
-    let filledApiKey = await page.getByTestId("remove-icon-badge").count();
-    while (filledApiKey > 0) {
-      await page.getByTestId("remove-icon-badge").first().click();
-      filledApiKey = await page.getByTestId("remove-icon-badge").count();
-    }
-
-    const apiKeyInput = page.getByTestId("popover-anchor-input-api_key");
-    const isApiKeyInputVisible = await apiKeyInput.isVisible();
-
-    if (isApiKeyInputVisible) {
-      await apiKeyInput.fill(process.env.OPENAI_API_KEY ?? "");
-    }
+    await initialGPTsetup(page);
 
     await page
       .getByTestId("textarea_str_input_value")
       .first()
       .fill(
-        "say a random number between 1 and 100000 and a random animal that lives in the sea",
+        "say a random number between 1 and 300000 and a random animal that lives in the sea",
       );
 
     await page.getByTestId("dropdown_str_model_name").click();
     await page.getByTestId("gpt-4o-1-option").click();
 
-    await page.waitForSelector('[data-testid="float_float_temperature"]', {
-      timeout: 1000,
-    });
-
-    await page.getByTestId("float_float_temperature").fill("1.0");
+    await page.getByTestId("fit_view").click();
 
     await page.waitForSelector('[data-testid="button_run_chat output"]', {
-      timeout: 1000,
+      timeout: 3000,
     });
 
     await page.getByTestId("button_run_chat output").click();
 
     await page.waitForSelector("text=built successfully", { timeout: 30000 });
 
-    await page.getByText("built successfully").last().click({
-      timeout: 15000,
-    });
-
-    await page.getByTestId("output-inspection-text").first().click();
+    await page
+      .getByTestId("output-inspection-output message-chatoutput")
+      .first()
+      .click();
 
     const randomTextGeneratedByAI = await page
       .getByPlaceholder("Empty")
       .first()
       .inputValue();
 
-    await page.getByText("Close").first().click();
+    await page.getByText("Close").last().click();
 
-    await page.waitForSelector('[data-testid="float_float_temperature"]', {
-      timeout: 3000,
-    });
-
-    await page.getByTestId("float_float_temperature").fill("");
-    await page.getByTestId("float_float_temperature").fill("1.2");
+    // Change model to force different output
+    await page.getByTestId("dropdown_str_model_name").click();
+    await page.getByTestId("gpt-4o-mini-0-option").click();
 
     await page.waitForSelector('[data-testid="button_run_chat output"]', {
-      timeout: 1000,
+      timeout: 3000,
     });
 
     await page.getByTestId("button_run_chat output").click();
     await page.waitForSelector("text=built successfully", { timeout: 30000 });
 
-    await page.getByText("built successfully").last().click({
-      timeout: 15000,
-    });
-
-    await page.getByTestId("output-inspection-text").first().click();
+    await page
+      .getByTestId("output-inspection-output message-chatoutput")
+      .first()
+      .click();
 
     const secondRandomTextGeneratedByAI = await page
       .getByPlaceholder("Empty")
       .first()
       .inputValue();
 
-    await page.getByText("Close").first().click();
+    await page.getByText("Close").last().click();
 
     await page.waitForSelector("text=OpenAI", {
-      timeout: 1000,
+      timeout: 3000,
     });
 
     await page.getByText("OpenAI", { exact: true }).last().click();
 
     await page.waitForSelector('[data-testid="more-options-modal"]', {
-      timeout: 1000,
+      timeout: 3000,
     });
 
-    await page.getByTestId("more-options-modal").click();
+    await page.getByText("Freeze").first().click();
 
-    await page.waitForSelector('[data-testid="freeze-path-button"]', {
-      timeout: 1000,
-    });
-
-    await page.getByTestId("freeze-path-button").click();
+    await page.waitForTimeout(2000);
 
     await page.waitForSelector('[data-testid="icon-Snowflake"]', {
-      timeout: 1000,
+      timeout: 3000,
     });
 
     expect(await page.getByTestId("icon-Snowflake").count()).toBeGreaterThan(0);
 
     await page.waitForSelector('[data-testid="button_run_chat output"]', {
-      timeout: 1000,
+      timeout: 3000,
     });
 
     await page.getByTestId("button_run_chat output").click();
 
     await page.waitForSelector("text=built successfully", { timeout: 30000 });
 
-    await page.getByText("built successfully").last().click({
-      timeout: 15000,
-    });
-
-    await page.getByTestId("output-inspection-text").first().click();
+    await page
+      .getByTestId("output-inspection-output message-chatoutput")
+      .first()
+      .click();
 
     const thirdRandomTextGeneratedByAI = await page
       .getByPlaceholder("Empty")
       .first()
       .inputValue();
 
-    await page.getByText("Close").first().click();
+    await page.getByText("Close").last().click();
 
     expect(randomTextGeneratedByAI).not.toEqual(secondRandomTextGeneratedByAI);
     expect(randomTextGeneratedByAI).not.toEqual(thirdRandomTextGeneratedByAI);
     expect(secondRandomTextGeneratedByAI).toEqual(thirdRandomTextGeneratedByAI);
   },
 );
+
+async function moveSlider(
+  page: Page,
+  side: "left" | "right",
+  advanced: boolean = false,
+) {
+  const thumbSelector = `slider_thumb${advanced ? "_advanced" : ""}`;
+  const trackSelector = `slider_track${advanced ? "_advanced" : ""}`;
+
+  await page.getByTestId(thumbSelector).click();
+
+  const trackBoundingBox = await page.getByTestId(trackSelector).boundingBox();
+
+  if (trackBoundingBox) {
+    const moveDistance =
+      trackBoundingBox.width * 0.1 * (side === "left" ? -1 : 1);
+    const centerX = trackBoundingBox.x + trackBoundingBox.width / 2;
+    const centerY = trackBoundingBox.y + trackBoundingBox.height / 2;
+
+    await page.mouse.move(centerX + moveDistance, centerY);
+    await page.mouse.down();
+    await page.mouse.up();
+  }
+}

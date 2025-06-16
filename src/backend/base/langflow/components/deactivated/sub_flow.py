@@ -3,11 +3,11 @@ from typing import TYPE_CHECKING, Any
 from loguru import logger
 
 from langflow.base.flow_processing.utils import build_data_from_result_data
-from langflow.custom import CustomComponent
+from langflow.custom.custom_component.custom_component import CustomComponent
 from langflow.graph.graph.base import Graph
 from langflow.graph.vertex.base import Vertex
 from langflow.helpers.flow import get_flow_inputs
-from langflow.schema import Data
+from langflow.schema.data import Data
 from langflow.schema.dotdict import dotdict
 from langflow.template.field.base import Input
 
@@ -24,28 +24,28 @@ class SubFlowComponent(CustomComponent):
     field_order = ["flow_name"]
     name = "SubFlow"
 
-    def get_flow_names(self) -> list[str]:
-        flow_datas = self.list_flows()
+    async def get_flow_names(self) -> list[str]:
+        flow_datas = await self.alist_flows()
         return [flow_data.data["name"] for flow_data in flow_datas]
 
-    def get_flow(self, flow_name: str) -> Data | None:
-        flow_datas = self.list_flows()
+    async def get_flow(self, flow_name: str) -> Data | None:
+        flow_datas = await self.alist_flows()
         for flow_data in flow_datas:
             if flow_data.data["name"] == flow_name:
                 return flow_data
         return None
 
-    def update_build_config(self, build_config: dotdict, field_value: Any, field_name: str | None = None):
+    async def update_build_config(self, build_config: dotdict, field_value: Any, field_name: str | None = None):
         logger.debug(f"Updating build config with field value {field_value} and field name {field_name}")
         if field_name == "flow_name":
-            build_config["flow_name"]["options"] = self.get_flow_names()
+            build_config["flow_name"]["options"] = await self.get_flow_names()
         # Clean up the build config
         for key in list(build_config.keys()):
             if key not in {*self.field_order, "code", "_type", "get_final_results_only"}:
                 del build_config[key]
         if field_value is not None and field_name == "flow_name":
             try:
-                flow_data = self.get_flow(field_value)
+                flow_data = await self.get_flow(field_value)
             except Exception:  # noqa: BLE001
                 logger.exception(f"Error getting flow {field_value}")
             else:

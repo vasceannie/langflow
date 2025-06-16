@@ -1,4 +1,4 @@
-from langflow.custom import CustomComponent
+from langflow.custom.custom_component.custom_component import CustomComponent
 from langflow.schema.message import Message
 from langflow.utils.constants import MESSAGE_SENDER_AI, MESSAGE_SENDER_USER
 
@@ -19,7 +19,7 @@ class MessageComponent(CustomComponent):
             "session_id": {
                 "display_name": "Session ID",
                 "info": "Session ID of the chat history.",
-                "input_types": ["Text"],
+                "input_types": ["Message"],
             },
         }
 

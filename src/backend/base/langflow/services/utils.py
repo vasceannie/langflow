@@ -9,6 +9,7 @@ from sqlalchemy import exc as sqlalchemy_exc
 from sqlmodel import col, select
 
 from langflow.services.auth.utils import create_super_user, verify_password
+from langflow.services.cache.base import ExternalAsyncBaseCacheService
 from langflow.services.cache.factory import CacheServiceFactory
 from langflow.services.database.models.transactions.model import TransactionTable
 from langflow.services.database.models.vertex_builds.model import VertexBuildTable
@@ -131,7 +132,7 @@ async def teardown_superuser(settings_service, session: AsyncSession) -> None:
 async def teardown_services() -> None:
     """Teardown all the services."""
     try:
-        async with get_db_service().with_async_session() as session:
+        async with get_db_service().with_session() as session:
             await teardown_superuser(get_settings_service(), session)
     except Exception as exc:  # noqa: BLE001
         logger.exception(exc)
@@ -177,9 +178,6 @@ async def clean_transactions(settings_service: SettingsService, session: AsyncSe
     Args:
         settings_service: The settings service containing configuration like max_transactions_to_keep
         session: The database session to use for the deletion
-
-    Returns:
-        None
     """
     try:
         # Delete transactions using bulk delete
@@ -209,9 +207,6 @@ async def clean_vertex_builds(settings_service: SettingsService, session: AsyncS
     Args:
         settings_service: The settings service containing configuration like max_vertex_builds_to_keep
         session: The database session to use for the deletion
-
-    Returns:
-        None
     """
     try:
         # Delete vertex builds using bulk delete
@@ -234,11 +229,17 @@ async def clean_vertex_builds(settings_service: SettingsService, session: AsyncS
 
 async def initialize_services(*, fix_migration: bool = False) -> None:
     """Initialize all the services needed."""
-    # Test cache connection
-    get_service(ServiceType.CACHE_SERVICE, default=CacheServiceFactory())
+    cache_service = get_service(ServiceType.CACHE_SERVICE, default=CacheServiceFactory())
+    # Test external cache connection
+    if isinstance(cache_service, ExternalAsyncBaseCacheService) and not (await cache_service.is_connected()):
+        msg = "Cache service failed to connect to external database"
+        raise ConnectionError(msg)
+
     # Setup the superuser
-    await asyncio.to_thread(initialize_database, fix_migration=fix_migration)
-    async with get_db_service().with_async_session() as session:
+    await initialize_database(fix_migration=fix_migration)
+    db_service = get_db_service()
+    await db_service.initialize_alembic_log_file()
+    async with db_service.with_session() as session:
         settings_service = get_service(ServiceType.SETTINGS_SERVICE)
         await setup_superuser(settings_service, session)
     try:

@@ -1,4 +1,6 @@
 import { expect, test } from "@playwright/test";
+import { awaitBootstrapTest } from "../../utils/await-bootstrap-test";
+import { renameFlow } from "../../utils/rename-flow";
 
 test(
   "when auto_login is false, admin can CRUD user's and should see just your own flows",
@@ -14,6 +16,20 @@ test(
       });
     });
 
+    await page.addInitScript(() => {
+      window.process = window.process || {};
+
+      const newEnv = { ...window.process.env, LANGFLOW_AUTO_LOGIN: "false" };
+
+      Object.defineProperty(window.process, "env", {
+        value: newEnv,
+        writable: true,
+        configurable: true,
+      });
+
+      sessionStorage.setItem("testMockAutoLogin", "true");
+    });
+
     const randomName = Math.random().toString(36).substring(5);
     const randomPassword = Math.random().toString(36).substring(5);
     const secondRandomName = Math.random().toString(36).substring(5);
@@ -26,6 +42,10 @@ test(
 
     await page.getByPlaceholder("Username").fill("langflow");
     await page.getByPlaceholder("Password").fill("langflow");
+
+    await page.evaluate(() => {
+      sessionStorage.removeItem("testMockAutoLogin");
+    });
 
     await page.getByRole("button", { name: "Sign In" }).click();
 
@@ -115,23 +135,7 @@ test(
       timeout: 30000,
     });
 
-    let modalCount = 0;
-    try {
-      const modalTitleElement = await page?.getByTestId("modal-title");
-      if (modalTitleElement) {
-        modalCount = await modalTitleElement.count();
-      }
-    } catch (error) {
-      modalCount = 0;
-    }
-
-    while (modalCount === 0) {
-      await page.getByText("New Flow", { exact: true }).click();
-      await page.waitForSelector('[data-testid="modal-title"]', {
-        timeout: 30000,
-      });
-      modalCount = await page.getByTestId("modal-title")?.count();
-    }
+    await awaitBootstrapTest(page, { skipGoto: true });
 
     await page.getByTestId("side_nav_options_all-templates").click();
     await page.getByRole("heading", { name: "Basic Prompting" }).click();
@@ -143,12 +147,7 @@ test(
     await page.getByTestId("fit_view").click();
     await page.getByTestId("zoom_out").click();
 
-    await page.getByTestId("flow-configuration-button").click();
-    await page.getByText("Flow Settings", { exact: true }).last().click();
-
-    await page.getByPlaceholder("Flow Name").fill(randomFlowName);
-
-    await page.getByText("Save", { exact: true }).click();
+    await renameFlow(page, { flowName: randomFlowName });
 
     await page.waitForSelector('[data-testid="icon-ChevronLeft"]', {
       timeout: 100000,
@@ -176,6 +175,10 @@ test(
 
     await page.getByTestId("user-profile-settings").click();
 
+    await page.evaluate(() => {
+      sessionStorage.setItem("testMockAutoLogin", "true");
+    });
+
     await page.getByText("Logout", { exact: true }).click();
 
     await page.waitForSelector("text=sign in to langflow", { timeout: 30000 });
@@ -189,34 +192,25 @@ test(
 
     await page.getByRole("button", { name: "Sign In" }).click();
 
+    await page.evaluate(() => {
+      sessionStorage.removeItem("testMockAutoLogin");
+    });
+
     await page.waitForSelector('[id="new-project-btn"]', {
       timeout: 30000,
     });
 
     expect(
       (
-        await page.waitForSelector(
-          "text=Begin with a template, or start from scratch.",
-          {
-            timeout: 30000,
-          },
-        )
+        await page.waitForSelector("text=Welcome to LangFlow", {
+          timeout: 30000,
+        })
       ).isVisible(),
     );
 
-    while (modalCount === 0) {
-      await page.getByText("New Flow", { exact: true }).click();
-      await page.waitForSelector('[data-testid="modal-title"]', {
-        timeout: 30000,
-      });
-      modalCount = await page.getByTestId("modal-title")?.count();
-    }
+    await page.waitForTimeout(2000);
 
-    await page.waitForSelector('[id="new-project-btn"]', {
-      timeout: 30000,
-    });
-
-    await page.getByText("New Flow", { exact: true }).click();
+    await awaitBootstrapTest(page, { skipGoto: true });
 
     await page.getByTestId("side_nav_options_all-templates").click();
     await page.getByRole("heading", { name: "Basic Prompting" }).click();
@@ -228,12 +222,7 @@ test(
     await page.getByTestId("fit_view").click();
     await page.getByTestId("zoom_out").click();
 
-    await page.getByTestId("flow-configuration-button").click();
-    await page.getByText("Flow Settings", { exact: true }).last().click();
-
-    await page.getByPlaceholder("Flow Name").fill(secondRandomFlowName);
-
-    await page.getByText("Save", { exact: true }).click();
+    await renameFlow(page, { flowName: secondRandomFlowName });
 
     await page.waitForSelector('[data-testid="icon-ChevronLeft"]', {
       timeout: 100000,
@@ -258,12 +247,20 @@ test(
 
     await page.getByTestId("user-profile-settings").click();
 
+    await page.evaluate(() => {
+      sessionStorage.setItem("testMockAutoLogin", "true");
+    });
+
     await page.getByText("Logout", { exact: true }).click();
 
     await page.waitForSelector("text=sign in to langflow", { timeout: 30000 });
 
     await page.getByPlaceholder("Username").fill("langflow");
     await page.getByPlaceholder("Password").fill("langflow");
+
+    await page.evaluate(() => {
+      sessionStorage.removeItem("testMockAutoLogin");
+    });
 
     await page.getByRole("button", { name: "Sign In" }).click();
 
@@ -281,6 +278,10 @@ test(
 
     await expect(page.getByText(randomFlowName, { exact: true })).toBeVisible({
       timeout: 2000,
+    });
+
+    await page.evaluate(() => {
+      sessionStorage.removeItem("testMockAutoLogin");
     });
   },
 );

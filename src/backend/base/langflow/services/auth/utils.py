@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Annotated
 from uuid import UUID
 
 from cryptography.fernet import Fernet
-from fastapi import Depends, HTTPException, Security, status
+from fastapi import Depends, HTTPException, Security, WebSocketException, status
 from fastapi.security import APIKeyHeader, APIKeyQuery, OAuth2PasswordBearer
 from jose import JWTError, jwt
 from loguru import logger
@@ -17,7 +17,7 @@ from starlette.websockets import WebSocket
 from langflow.services.database.models.api_key.crud import check_key
 from langflow.services.database.models.user.crud import get_user_by_id, get_user_by_username, update_user_last_login_at
 from langflow.services.database.models.user.model import User, UserRead
-from langflow.services.deps import get_async_session, get_db_service, get_settings_service
+from langflow.services.deps import get_db_service, get_session, get_settings_service
 from langflow.services.settings.service import SettingsService
 
 if TYPE_CHECKING:
@@ -41,7 +41,7 @@ async def api_key_security(
     settings_service = get_settings_service()
     result: ApiKey | User | None
 
-    async with get_db_service().with_async_session() as db:
+    async with get_db_service().with_session() as db:
         if settings_service.auth_settings.AUTO_LOGIN:
             # Get the first user
             if not settings_service.auth_settings.SUPERUSER:
@@ -49,8 +49,19 @@ async def api_key_security(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Missing first superuser credentials",
                 )
-
-            result = await get_user_by_username(db, settings_service.auth_settings.SUPERUSER)
+            warnings.warn(
+                (
+                    "In v1.5, the default behavior of AUTO_LOGIN authentication will change to require a valid API key"
+                    " or JWT. If you integrated with Langflow prior to v1.5, make sure to update your code to pass an "
+                    "API key or JWT when authenticating with protected endpoints."
+                ),
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            if query_param or header_param:
+                result = await check_key(db, query_param or header_param)
+            else:
+                result = await get_user_by_username(db, settings_service.auth_settings.SUPERUSER)
 
         elif not query_param and not header_param:
             raise HTTPException(
@@ -75,11 +86,60 @@ async def api_key_security(
     raise ValueError(msg)
 
 
+async def ws_api_key_security(
+    api_key: str | None,
+) -> UserRead:
+    settings = get_settings_service()
+    async with get_db_service().with_session() as db:
+        if settings.auth_settings.AUTO_LOGIN:
+            if not settings.auth_settings.SUPERUSER:
+                # internal server misconfiguration
+                raise WebSocketException(
+                    code=status.WS_1011_INTERNAL_ERROR,
+                    reason="Missing first superuser credentials",
+                )
+            warnings.warn(
+                ("In v1.5, AUTO_LOGIN will *require* a valid API key or JWT. Please update your clients accordingly."),
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            if api_key:
+                result = await check_key(db, api_key)
+            else:
+                result = await get_user_by_username(db, settings.auth_settings.SUPERUSER)
+
+        # normal path: must provide an API key
+        else:
+            if not api_key:
+                raise WebSocketException(
+                    code=status.WS_1008_POLICY_VIOLATION,
+                    reason="An API key must be passed as query or header",
+                )
+            result = await check_key(db, api_key)
+
+        # key was invalid or missing
+        if not result:
+            raise WebSocketException(
+                code=status.WS_1008_POLICY_VIOLATION,
+                reason="Invalid or missing API key",
+            )
+
+        # convert SQL-model User → pydantic UserRead
+        if isinstance(result, User):
+            return UserRead.model_validate(result, from_attributes=True)
+
+    # fallback: something unexpected happened
+    raise WebSocketException(
+        code=status.WS_1011_INTERNAL_ERROR,
+        reason="Authentication subsystem error",
+    )
+
+
 async def get_current_user(
     token: Annotated[str, Security(oauth2_login)],
     query_param: Annotated[str, Security(api_key_query)],
     header_param: Annotated[str, Security(api_key_header)],
-    db: Annotated[AsyncSession, Depends(get_async_session)],
+    db: Annotated[AsyncSession, Depends(get_session)],
 ) -> User:
     if token:
         return await get_current_user_by_jwt(token, db)
@@ -136,7 +196,7 @@ async def get_current_user_by_jwt(
                 headers={"WWW-Authenticate": "Bearer"},
             )
     except JWTError as e:
-        logger.exception("JWT decoding error")
+        logger.debug("JWT validation failed: Invalid token format or signature")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials",
@@ -156,16 +216,28 @@ async def get_current_user_by_jwt(
 
 async def get_current_user_for_websocket(
     websocket: WebSocket,
-    db: Annotated[AsyncSession, Depends(get_async_session)],
-    query_param: Annotated[str, Security(api_key_query)],
-) -> User | None:
-    token = websocket.query_params.get("token")
-    api_key = websocket.query_params.get("x-api-key")
+    db: AsyncSession,
+) -> User | UserRead:
+    token = websocket.cookies.get("access_token_lf") or websocket.query_params.get("token")
     if token:
-        return await get_current_user_by_jwt(token, db)
+        user = await get_current_user_by_jwt(token, db)
+        if user:
+            return user
+
+    api_key = (
+        websocket.query_params.get("x-api-key")
+        or websocket.query_params.get("api_key")
+        or websocket.headers.get("x-api-key")
+        or websocket.headers.get("api_key")
+    )
     if api_key:
-        return await api_key_security(api_key, query_param)
-    return None
+        user_read = await ws_api_key_security(api_key)
+        if user_read:
+            return user_read
+
+    raise WebSocketException(
+        code=status.WS_1008_POLICY_VIOLATION, reason="Missing or invalid credentials (cookie, token or API key)."
+    )
 
 
 async def get_current_active_user(current_user: Annotated[User, Depends(get_current_user)]):
@@ -375,13 +447,29 @@ def encrypt_api_key(api_key: str, settings_service: SettingsService):
 
 
 def decrypt_api_key(encrypted_api_key: str, settings_service: SettingsService):
+    """Decrypt the provided encrypted API key using Fernet decryption.
+
+    This function first attempts to decrypt the API key by encoding it,
+    assuming it is a properly encoded string. If that fails, it logs a detailed
+    debug message including the exception information and retries decryption
+    using the original string input.
+
+    Args:
+        encrypted_api_key (str): The encrypted API key.
+        settings_service (SettingsService): Service providing authentication settings.
+
+    Returns:
+        str: The decrypted API key, or an empty string if decryption cannot be performed.
+    """
     fernet = get_fernet(settings_service)
-    decrypted_key = ""
-    # Two-way decryption
     if isinstance(encrypted_api_key, str):
         try:
-            decrypted_key = fernet.decrypt(encrypted_api_key.encode()).decode()
-        except Exception:  # noqa: BLE001
-            logger.debug("Failed to decrypt API key")
-            decrypted_key = fernet.decrypt(encrypted_api_key).decode()
-    return decrypted_key
+            return fernet.decrypt(encrypted_api_key.encode()).decode()
+        except Exception as primary_exception:  # noqa: BLE001
+            logger.debug(
+                "Decryption using UTF-8 encoded API key failed. Error: %s. "
+                "Retrying decryption using the raw string input.",
+                primary_exception,
+            )
+            return fernet.decrypt(encrypted_api_key).decode()
+    return ""

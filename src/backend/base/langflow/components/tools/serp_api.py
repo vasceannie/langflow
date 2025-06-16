@@ -8,8 +8,8 @@ from pydantic import BaseModel, Field
 
 from langflow.base.langchain_utilities.model import LCToolComponent
 from langflow.field_typing import Tool
-from langflow.inputs import DictInput, IntInput, MultilineInput, SecretStrInput
-from langflow.schema import Data
+from langflow.inputs.inputs import DictInput, IntInput, MultilineInput, SecretStrInput
+from langflow.schema.data import Data
 
 
 class SerpAPISchema(BaseModel):
@@ -30,10 +30,11 @@ class SerpAPISchema(BaseModel):
 
 
 class SerpAPIComponent(LCToolComponent):
-    display_name = "Serp Search API"
+    display_name = "Serp Search API [DEPRECATED]"
     description = "Call Serp Search API with result limiting"
     name = "SerpAPI"
     icon = "SerpSearch"
+    legacy = True
 
     inputs = [
         SecretStrInput(name="serpapi_api_key", display_name="SerpAPI API Key", required=True),

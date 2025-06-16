@@ -1,19 +1,20 @@
-import { CodeBlock } from "@/modals/IOModal/components/chatView/chatMessage/codeBlock";
 import { ContentType } from "@/types/chat";
 import { ReactNode } from "react";
 import Markdown from "react-markdown";
 import rehypeMathjax from "rehype-mathjax";
 import remarkGfm from "remark-gfm";
 import ForwardedIconComponent from "../../common/genericIconComponent";
-import SimplifiedCodeTabComponent from "../codeTabsComponent/ChatCodeTabComponent";
+import SimplifiedCodeTabComponent from "../codeTabsComponent";
 import DurationDisplay from "./DurationDisplay";
 
 export default function ContentDisplay({
   content,
   chatId,
+  playgroundPage,
 }: {
   content: ContentType;
   chatId: string;
+  playgroundPage?: boolean;
 }) {
   // First render the common BaseContent elements if they exist
   const renderHeader = content.header && (
@@ -31,7 +32,7 @@ export default function ContentDisplay({
             <Markdown
               remarkPlugins={[remarkGfm]}
               rehypePlugins={[rehypeMathjax]}
-              className="inline-block w-fit max-w-full text-[14px] font-semibold text-foreground"
+              className="inline-block w-fit max-w-full text-sm font-semibold text-foreground"
             >
               {content.header.title}
             </Markdown>
@@ -40,7 +41,7 @@ export default function ContentDisplay({
       </div>
     </>
   );
-  const renderDuration = content.duration !== undefined && (
+  const renderDuration = content.duration !== undefined && !playgroundPage && (
     <div className="absolute right-2 top-4">
       <DurationDisplay duration={content.duration} chatId={chatId} />
     </div>
@@ -56,7 +57,7 @@ export default function ContentDisplay({
             remarkPlugins={[remarkGfm]}
             linkTarget="_blank"
             rehypePlugins={[rehypeMathjax]}
-            className="markdown prose max-w-full text-[14px] font-normal dark:prose-invert"
+            className="markdown prose max-w-full text-sm font-normal dark:prose-invert"
             components={{
               p({ node, ...props }) {
                 return (
@@ -120,9 +121,9 @@ export default function ContentDisplay({
     case "json":
       contentData = (
         <div className="pr-20">
-          <CodeBlock
+          <SimplifiedCodeTabComponent
             language="json"
-            value={JSON.stringify(content.data, null, 2)}
+            code={JSON.stringify(content.data, null, 2)}
           />
         </div>
       );
@@ -134,7 +135,10 @@ export default function ContentDisplay({
           {content.reason && <div>Reason: {content.reason}</div>}
           {content.solution && <div>Solution: {content.solution}</div>}
           {content.traceback && (
-            <CodeBlock language="text" value={content.traceback} />
+            <SimplifiedCodeTabComponent
+              language="text"
+              code={content.traceback}
+            />
           )}
         </div>
       );
@@ -150,7 +154,7 @@ export default function ContentDisplay({
             <Markdown
               remarkPlugins={[remarkGfm]}
               rehypePlugins={[rehypeMathjax]}
-              className="markdown prose max-w-full text-[14px] font-normal dark:prose-invert"
+              className="markdown prose max-w-full text-sm font-normal dark:prose-invert"
               components={{
                 pre({ node, ...props }) {
                   return <>{props.children}</>;
@@ -184,9 +188,9 @@ export default function ContentDisplay({
         // For objects/arrays, format as JSON
         try {
           return (
-            <CodeBlock
+            <SimplifiedCodeTabComponent
               language="json"
-              value={JSON.stringify(output, null, 2)}
+              code={JSON.stringify(output, null, 2)}
             />
           );
         } catch {
@@ -199,20 +203,20 @@ export default function ContentDisplay({
           <Markdown
             remarkPlugins={[remarkGfm]}
             rehypePlugins={[rehypeMathjax]}
-            className="markdown prose max-w-full text-[14px] font-normal dark:prose-invert"
+            className="markdown prose max-w-full text-sm font-normal dark:prose-invert"
           >
-            {`${content.name ? `**Tool:** ${content.name}\n\n` : ""}**Input:**`}
+            **Input:**
           </Markdown>
-          <CodeBlock
+          <SimplifiedCodeTabComponent
             language="json"
-            value={JSON.stringify(content.tool_input, null, 2)}
+            code={JSON.stringify(content.tool_input, null, 2)}
           />
-          {content.output !== undefined && (
+          {content.output && (
             <>
               <Markdown
                 remarkPlugins={[remarkGfm]}
                 rehypePlugins={[rehypeMathjax]}
-                className="markdown prose max-w-full text-[14px] font-normal dark:prose-invert"
+                className="markdown prose max-w-full text-sm font-normal dark:prose-invert"
               >
                 **Output:**
               </Markdown>
@@ -224,13 +228,13 @@ export default function ContentDisplay({
               <Markdown
                 remarkPlugins={[remarkGfm]}
                 rehypePlugins={[rehypeMathjax]}
-                className="markdown prose max-w-full text-[14px] font-normal dark:prose-invert"
+                className="markdown prose max-w-full text-sm font-normal dark:prose-invert"
               >
                 **Error:**
               </Markdown>
-              <CodeBlock
+              <SimplifiedCodeTabComponent
                 language="json"
-                value={JSON.stringify(content.error, null, 2)}
+                code={JSON.stringify(content.error, null, 2)}
               />
             </div>
           )}

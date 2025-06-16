@@ -6,8 +6,8 @@ from pydantic import BaseModel, Field
 
 from langflow.base.langchain_utilities.model import LCToolComponent
 from langflow.field_typing import Tool
-from langflow.inputs import MultilineInput
-from langflow.schema import Data
+from langflow.inputs.inputs import MultilineInput
+from langflow.schema.data import Data
 
 
 class WikidataSearchSchema(BaseModel):
@@ -53,10 +53,11 @@ class WikidataAPIWrapper(BaseModel):
 
 
 class WikidataAPIComponent(LCToolComponent):
-    display_name = "Wikidata API"
+    display_name = "Wikidata API [Deprecated]"
     description = "Performs a search using the Wikidata API."
     name = "WikidataAPI"
     icon = "Wikipedia"
+    legacy = True
 
     inputs = [
         MultilineInput(

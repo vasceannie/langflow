@@ -1,6 +1,6 @@
 from typing import Any
 
-from langflow.custom import Component
+from langflow.custom.custom_component.component import Component
 from langflow.field_typing.range_spec import RangeSpec
 from langflow.inputs.inputs import (
     BoolInput,
@@ -10,7 +10,7 @@ from langflow.inputs.inputs import (
     MessageTextInput,
 )
 from langflow.io import Output
-from langflow.schema import Data
+from langflow.schema.data import Data
 from langflow.schema.dotdict import dotdict
 
 
@@ -20,6 +20,7 @@ class UpdateDataComponent(Component):
     name: str = "UpdateData"
     MAX_FIELDS = 15  # Define a constant for maximum number of fields
     icon = "FolderSync"
+    legacy = True
 
     inputs = [
         DataInput(
@@ -27,6 +28,7 @@ class UpdateDataComponent(Component):
             display_name="Data",
             info="The record to update.",
             is_list=True,  # Changed to True to handle list of Data objects
+            required=True,
         ),
         IntInput(
             name="number_of_fields",
@@ -78,7 +80,7 @@ class UpdateDataComponent(Component):
 
             if field_value_int > self.MAX_FIELDS:
                 build_config["number_of_fields"]["value"] = self.MAX_FIELDS
-                msg = f"Number of fields cannot exceed {self.MAX_FIELDS}. " "Try using a Component to combine two Data."
+                msg = f"Number of fields cannot exceed {self.MAX_FIELDS}. Try using a Component to combine two Data."
                 raise ValueError(msg)
 
             existing_fields = {}
@@ -97,7 +99,7 @@ class UpdateDataComponent(Component):
                         display_name=f"Field {i}",
                         name=key,
                         info=f"Key for field {i}.",
-                        input_types=["Text", "Data"],
+                        input_types=["Message", "Data"],
                     )
                     build_config[field.name] = field.to_dict()
 
@@ -154,5 +156,5 @@ class UpdateDataComponent(Component):
         """This function validates that the Text Key is one of the keys in the Data."""
         data_keys = data.data.keys()
         if self.text_key and self.text_key not in data_keys:
-            msg = f"Text Key: '{self.text_key}' not found in the Data keys: " f"{', '.join(data_keys)}"
+            msg = f"Text Key: '{self.text_key}' not found in the Data keys: {', '.join(data_keys)}"
             raise ValueError(msg)

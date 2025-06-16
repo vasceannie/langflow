@@ -1,11 +1,10 @@
 import json
-import re
 import unicodedata
 
-from langflow.custom import Component
-from langflow.inputs import BoolInput, MessageTextInput
+from langflow.custom.custom_component.component import Component
+from langflow.inputs.inputs import BoolInput, MessageTextInput
 from langflow.schema.message import Message
-from langflow.template import Output
+from langflow.template.field.base import Output
 
 
 class JSONCleaner(Component):
@@ -15,7 +14,7 @@ class JSONCleaner(Component):
         "Cleans the messy and sometimes incorrect JSON strings produced by LLMs "
         "so that they are fully compliant with the JSON spec."
     )
-
+    legacy = True
     inputs = [
         MessageTextInput(
             name="json_str", display_name="JSON String", info="The JSON string to be cleaned.", required=True
@@ -83,7 +82,7 @@ class JSONCleaner(Component):
 
     def _remove_control_characters(self, s: str) -> str:
         """Remove control characters from the string."""
-        return re.sub(r"[\x00-\x1F\x7F]", "", s)
+        return s.translate(self.translation_table)
 
     def _normalize_unicode(self, s: str) -> str:
         """Normalize Unicode characters in the string."""
@@ -97,3 +96,8 @@ class JSONCleaner(Component):
             msg = f"Invalid JSON string: {e}"
             raise ValueError(msg) from e
         return s
+
+    def __init__(self, *args, **kwargs):
+        # Create a translation table that maps control characters to None
+        super().__init__(*args, **kwargs)
+        self.translation_table = str.maketrans("", "", "".join(chr(i) for i in range(32)) + chr(127))

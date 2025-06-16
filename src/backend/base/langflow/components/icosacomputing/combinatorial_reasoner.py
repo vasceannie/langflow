@@ -2,10 +2,10 @@ import requests
 from requests.auth import HTTPBasicAuth
 
 from langflow.base.models.openai_constants import OPENAI_MODEL_NAMES
-from langflow.custom import Component
-from langflow.inputs import DropdownInput, SecretStrInput, StrInput
+from langflow.custom.custom_component.component import Component
+from langflow.inputs.inputs import DropdownInput, SecretStrInput, StrInput
 from langflow.io import MessageTextInput, Output
-from langflow.schema import Data
+from langflow.schema.data import Data
 from langflow.schema.message import Message
 
 
@@ -16,25 +16,28 @@ class CombinatorialReasonerComponent(Component):
     name = "Combinatorial Reasoner"
 
     inputs = [
-        MessageTextInput(name="prompt", display_name="Prompt"),
+        MessageTextInput(name="prompt", display_name="Prompt", required=True),
         SecretStrInput(
             name="openai_api_key",
             display_name="OpenAI API Key",
             info="The OpenAI API Key to use for the OpenAI model.",
             advanced=False,
             value="OPENAI_API_KEY",
+            required=True,
         ),
         StrInput(
             name="username",
             display_name="Username",
             info="Username to authenticate access to Icosa CR API",
             advanced=False,
+            required=True,
         ),
         SecretStrInput(
             name="password",
             display_name="Password",
             info="Password to authenticate access to Icosa CR API.",
             advanced=False,
+            required=True,
         ),
         DropdownInput(
             name="model_name",

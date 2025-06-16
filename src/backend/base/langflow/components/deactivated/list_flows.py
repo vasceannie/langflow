@@ -1,5 +1,5 @@
-from langflow.custom import CustomComponent
-from langflow.schema import Data
+from langflow.custom.custom_component.custom_component import CustomComponent
+from langflow.schema.data import Data
 
 
 class ListFlowsComponent(CustomComponent):
@@ -12,9 +12,9 @@ class ListFlowsComponent(CustomComponent):
     def build_config(self):
         return {}
 
-    def build(
+    async def build(
         self,
     ) -> list[Data]:
-        flows = self.list_flows()
+        flows = await self.alist_flows()
         self.status = flows
         return flows

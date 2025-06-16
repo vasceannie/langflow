@@ -1,13 +1,12 @@
-import "ace-builds/src-noconflict/ace";
-import "ace-builds/src-noconflict/ext-language_tools";
-import "ace-builds/src-noconflict/mode-python";
-import "ace-builds/src-noconflict/theme-github";
-import "ace-builds/src-noconflict/theme-twilight";
-// import "ace-builds/webpack-resolver";
 import { usePostValidateCode } from "@/controllers/API/queries/nodes/use-post-validate-code";
 import { usePostValidateComponentCode } from "@/controllers/API/queries/nodes/use-post-validate-component-code";
 import useFlowStore from "@/stores/flowStore";
-import { cloneDeep } from "lodash";
+import "ace-builds/src-noconflict/ace";
+import "ace-builds/src-noconflict/ext-language_tools";
+import "ace-builds/src-noconflict/ext-searchbox";
+import "ace-builds/src-noconflict/mode-python";
+import "ace-builds/src-noconflict/theme-github";
+import "ace-builds/src-noconflict/theme-twilight";
 import { useEffect, useRef, useState } from "react";
 import AceEditor from "react-ace";
 import ReactAce from "react-ace/lib/ace";
@@ -55,15 +54,12 @@ export default function CodeAreaModal({
   const setErrorData = useAlertStore((state) => state.setErrorData);
   const [openConfirmation, setOpenConfirmation] = useState(false);
   const codeRef = useRef<ReactAce | null>(null);
-  const { mutate, isPending } = usePostValidateCode();
+  const { mutate } = usePostValidateCode();
   const [error, setError] = useState<{
     detail: CodeErrorDataTypeAPI;
   } | null>(null);
 
   const { mutate: validateComponentCode } = usePostValidateComponentCode();
-  const currentFlow = useFlowStore((state) => state.currentFlow);
-  const nodes = useFlowStore((state) => state.nodes);
-  const setNodes = useFlowStore((state) => state.setNodes);
 
   useEffect(() => {
     // if nodeClass.template has more fields other than code and dynamic is true
@@ -126,17 +122,6 @@ export default function CodeAreaModal({
           if (data && type) {
             setValue(code);
             setNodeClass(data, type);
-            const currentNode = nodes.find((node) => node.id === componentId);
-            const currentNodeIndex = nodes.findIndex(
-              (node) => node.id === componentId,
-            );
-            const currentNodes = cloneDeep(nodes);
-
-            if (currentNode) {
-              currentNodes[currentNodeIndex].data.node = data;
-            }
-            setNodes(currentNodes);
-
             setError({ detail: { error: undefined, traceback: undefined } });
             setOpen(false);
           }
@@ -159,7 +144,7 @@ export default function CodeAreaModal({
   useEffect(() => {
     // Function to be executed after the state changes
     const delayedFunction = setTimeout(() => {
-      if (error?.detail.error !== undefined) {
+      if (error?.detail?.error !== undefined) {
         //trigger to update the height, does not really apply any height
         setHeight("90%");
       }
@@ -191,6 +176,8 @@ export default function CodeAreaModal({
         } else {
           if (
             !(
+              codeRef.current?.editor.completer &&
+              "popup" in codeRef.current?.editor.completer &&
               codeRef.current?.editor.completer.popup &&
               codeRef.current?.editor.completer.popup.isOpen
             )

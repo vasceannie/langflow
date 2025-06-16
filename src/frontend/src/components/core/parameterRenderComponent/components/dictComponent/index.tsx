@@ -8,7 +8,7 @@ import { Button } from "../../../../ui/button";
 import { InputProps } from "../../types";
 
 export default function DictComponent({
-  value = [],
+  value,
   handleOnNewValue,
   disabled,
   editNode = false,
@@ -16,7 +16,7 @@ export default function DictComponent({
   name = "",
 }: InputProps<object | object[] | string, { name: string }>): JSX.Element {
   useEffect(() => {
-    if (disabled) {
+    if (disabled || value === null) {
       handleOnNewValue({ value: {} }, { skipSnapshot: true });
     }
   }, [disabled]);
@@ -45,7 +45,7 @@ export default function DictComponent({
                 "hover:bg-mute w-full font-medium text-primary",
                 editNode ? "h-fit px-3 py-0.5" : "",
               )}
-              data-testid="dict-input"
+              data-testid={editNode ? `edit_${id}` : `${id}`}
             >
               <ForwardedIconComponent
                 strokeWidth={ICON_STROKE_WIDTH}

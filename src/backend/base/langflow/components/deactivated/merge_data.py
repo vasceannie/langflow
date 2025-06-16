@@ -1,8 +1,8 @@
 from loguru import logger
 
-from langflow.custom import Component
+from langflow.custom.custom_component.component import Component
 from langflow.io import DataInput, Output
-from langflow.schema import Data
+from langflow.schema.data import Data
 
 
 class MergeDataComponent(Component):
@@ -76,7 +76,7 @@ class MergeDataComponent(Component):
                     # Use the existing value if the key exists, otherwise use an empty string
                     value = data_input.data.get(key, "")
                     if key not in data_input.data:
-                        log_message = f"Key '{key}' missing in data input at index {idx}. " "Assigning empty string."
+                        log_message = f"Key '{key}' missing in data input at index {idx}. Assigning empty string."
                         logger.debug(log_message)
                     merged_data_dict[key] = value
 

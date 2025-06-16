@@ -1,6 +1,8 @@
 import { expect, test } from "@playwright/test";
 import * as dotenv from "dotenv";
 import path from "path";
+import { adjustScreenView } from "../../utils/adjust-screen-view";
+import { awaitBootstrapTest } from "../../utils/await-bootstrap-test";
 
 test.skip(
   "TextInputOutputComponent",
@@ -14,27 +16,8 @@ test.skip(
     if (!process.env.CI) {
       dotenv.config({ path: path.resolve(__dirname, "../../.env") });
     }
-    await page.goto("/");
-    await page.waitForSelector('[data-testid="mainpage_title"]', {
-      timeout: 30000,
-    });
-    await page.waitForSelector('[id="new-project-btn"]', {
-      timeout: 30000,
-    });
-    let modalCount = 0;
-    try {
-      const modalTitleElement = await page?.getByTestId("modal-title");
-      if (modalTitleElement) {
-        modalCount = await modalTitleElement.count();
-      }
-    } catch (error) {
-      modalCount = 0;
-    }
-    while (modalCount === 0) {
-      await page.getByText("New Flow", { exact: true }).click();
-      await page.waitForTimeout(3000);
-      modalCount = await page.getByTestId("modal-title")?.count();
-    }
+    await awaitBootstrapTest(page);
+
     await page.waitForSelector('[data-testid="blank-flow"]', {
       timeout: 30000,
     });
@@ -43,7 +26,7 @@ test.skip(
     await page.getByTestId("sidebar-search-input").fill("text input");
     await page.waitForTimeout(1000);
     await page
-      .getByTestId("inputsText Input")
+      .getByTestId("input_outputText Input")
       .dragTo(page.locator('//*[@id="react-flow-id"]'));
     await page.mouse.up();
     await page.mouse.down();
@@ -51,20 +34,14 @@ test.skip(
     await page.getByTestId("sidebar-search-input").fill("openai");
     await page.waitForTimeout(1000);
     await page
-      .getByTestId("modelsOpenAI")
+      .getByTestId("languagemodelsOpenAI")
       .dragTo(page.locator('//*[@id="react-flow-id"]'));
     await page.mouse.up();
     await page.mouse.down();
-    await page.waitForSelector('[data-testid="fit_view"]', {
-      timeout: 100000,
-    });
-    await page.getByTestId("fit_view").click();
-    await page.getByTestId("zoom_out").click();
-    await page.getByTestId("zoom_out").click();
-    await page.getByTestId("zoom_out").click();
+    await adjustScreenView(page);
     let visibleElementHandle;
     const elementsTextInputOutput = await page
-      .getByTestId("handle-textinput-shownode-text-right")
+      .getByTestId("handle-textinput-shownode-output text-right")
       .all();
     for (const element of elementsTextInputOutput) {
       if (await element.isVisible()) {
@@ -95,7 +72,7 @@ test.skip(
     await page.getByTestId("sidebar-search-input").click();
     await page.getByTestId("sidebar-search-input").fill("text output");
     await page
-      .getByTestId("outputsText Output")
+      .getByTestId("input_outputText Output")
       .dragTo(page.locator('//*[@id="react-flow-id"]'));
     await page.mouse.up();
     await page.mouse.down();
@@ -125,7 +102,7 @@ test.skip(
     await visibleElementHandle.hover();
     await page.mouse.down();
     const elementTextOutputInput = await page
-      .getByTestId("handle-textoutput-shownode-text-left")
+      .getByTestId("handle-textoutput-shownode-inputs-left")
       .all();
     for (const element of elementTextOutputInput) {
       if (await element.isVisible()) {
@@ -145,13 +122,11 @@ test.skip(
       .getByTestId(/^rf__node-TextInput-[a-zA-Z0-9]+$/)
       .getByTestId("textarea_str_input_value")
       .fill("This is a test!");
-    let outdatedComponents = await page
-      .getByTestId("icon-AlertTriangle")
-      .count();
+    let outdatedComponents = await page.getByTestId("update-button").count();
     while (outdatedComponents > 0) {
-      await page.getByTestId("icon-AlertTriangle").first().click();
+      await page.getByTestId("update-button").first().click();
       await page.waitForTimeout(1000);
-      outdatedComponents = await page.getByTestId("icon-AlertTriangle").count();
+      outdatedComponents = await page.getByTestId("update-button").count();
     }
     let filledApiKey = await page.getByTestId("remove-icon-badge").count();
     while (filledApiKey > 0) {
@@ -167,11 +142,11 @@ test.skip(
     await page.getByTestId("dropdown_str_model_name").click();
     await page.getByTestId("gpt-4o-1-option").click();
     await page.waitForTimeout(1000);
-    await page.getByText("Playground", { exact: true }).last().click();
+    await page.getByRole("button", { name: "Playground", exact: true }).click();
     await page.getByTestId("button_run_text_output").click();
     await page
       .getByTestId(/^rf__node-TextOutput-[a-zA-Z0-9]+$/)
-      .getByTestId("output-inspection-text")
+      .getByTestId("output-inspection-output message-chatoutput")
       .click();
     await page.getByText("Run Flow", { exact: true }).click();
     await page.waitForTimeout(5000);
@@ -190,7 +165,7 @@ test.skip(
       .getByTestId(/^rf__node-TextInput-[a-zA-Z0-9]+$/)
       .getByTestId("textarea_str_input_value")
       .fill("This is a test, again just to be sure!");
-    await page.getByText("Playground", { exact: true }).last().click();
+    await page.getByRole("button", { name: "Playground", exact: true }).click();
     await page.getByText("Run Flow", { exact: true }).click();
     await page.waitForTimeout(5000);
     textInputContent = await page

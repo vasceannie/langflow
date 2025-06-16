@@ -1,11 +1,14 @@
 import asyncio
 import inspect
+import os
 import platform
 import signal
 import socket
 import sys
 import time
 import warnings
+from contextlib import suppress
+from ipaddress import ip_address
 from pathlib import Path
 
 import click
@@ -17,17 +20,16 @@ from multiprocess import cpu_count
 from multiprocess.context import Process
 from packaging import version as pkg_version
 from rich import box
-from rich import print as rprint
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 from sqlmodel import select
 
+from langflow.initial_setup.setup import get_or_create_default_folder
 from langflow.logging.logger import configure, logger
 from langflow.main import setup_app
-from langflow.services.database.models.folder.utils import create_default_folder_if_it_doesnt_exist
-from langflow.services.database.utils import async_session_getter
-from langflow.services.deps import async_session_scope, get_db_service, get_settings_service
+from langflow.services.database.utils import session_getter
+from langflow.services.deps import get_db_service, get_settings_service, session_scope
 from langflow.services.settings.constants import DEFAULT_SUPERUSER
 from langflow.services.utils import initialize_services
 from langflow.utils.version import fetch_latest_version, get_version_info
@@ -154,6 +156,15 @@ def run(
         help="Defines the maximum file size for the upload in MB.",
         show_default=False,
     ),
+    webhook_polling_interval: int | None = typer.Option(  # noqa: ARG001
+        None,
+        help="Defines the polling interval for the webhook.",
+        show_default=False,
+    ),
+    ssl_cert_file_path: str | None = typer.Option(
+        None, help="Defines the SSL certificate file path.", show_default=False
+    ),
+    ssl_key_file_path: str | None = typer.Option(None, help="Defines the SSL key file path.", show_default=False),
 ) -> None:
     """Run Langflow."""
     # Register SIGTERM handler
@@ -167,6 +178,11 @@ def run(
     set_var_for_macos_issue()
     settings_service = get_settings_service()
 
+    for key, value in os.environ.items():
+        new_key = key.replace("LANGFLOW_", "")
+        if hasattr(settings_service.auth_settings, new_key):
+            setattr(settings_service.auth_settings, new_key, value)
+
     frame = inspect.currentframe()
     valid_args: list = []
     values: dict = {}
@@ -179,6 +195,8 @@ def run(
             settings_service.settings.update_settings(components_path=components_path)
         elif hasattr(settings_service.settings, arg):
             settings_service.set(arg, values[arg])
+        elif hasattr(settings_service.auth_settings, arg):
+            settings_service.auth_settings.set(arg, values[arg])
         logger.debug(f"Loading config from cli parameter '{arg}': '{values[arg]}'")
 
     host = settings_service.settings.host
@@ -188,6 +206,8 @@ def run(
     log_level = settings_service.settings.log_level
     frontend_path = settings_service.settings.frontend_path
     backend_only = settings_service.settings.backend_only
+    ssl_cert_file_path = settings_service.settings.ssl_cert_file if ssl_cert_file_path is None else ssl_cert_file_path
+    ssl_key_file_path = settings_service.settings.ssl_key_file if ssl_key_file_path is None else ssl_key_file_path
 
     # create path object if frontend_path is provided
     static_files_dir: Path | None = Path(frontend_path) if frontend_path else None
@@ -201,7 +221,10 @@ def run(
         "bind": f"{host}:{port}",
         "workers": get_number_of_workers(workers),
         "timeout": worker_timeout,
+        "certfile": ssl_cert_file_path,
+        "keyfile": ssl_key_file_path,
     }
+    protocol = "https" if options["keyfile"] and options["certfile"] else "http"
 
     # Define an env variable to know if we are just testing the server
     if "pytest" in sys.modules:
@@ -212,12 +235,13 @@ def run(
             # Run using uvicorn on MacOS and Windows
             # Windows doesn't support gunicorn
             # MacOS requires an env variable to be set to use gunicorn
-            run_on_windows(host, port, log_level, options, app)
+            run_on_windows(host, port, log_level, options, app, protocol)
         else:
             # Run using gunicorn on Linux
-            process = run_on_mac_or_linux(host, port, log_level, options, app)
+            process = run_on_mac_or_linux(host, port, log_level, options, app, protocol)
         if open_browser and not backend_only:
-            click.launch(f"http://{host}:{port}")
+            browser_host = get_best_access_host(host, port)
+            click.launch(f"{protocol}://{browser_host}:{port}")
         if process:
             process.join()
     except (KeyboardInterrupt, SystemExit) as e:
@@ -236,12 +260,14 @@ def run(
         raise typer.Exit(1) from e
 
 
-def wait_for_server_ready(host, port) -> None:
+def wait_for_server_ready(host, port, protocol) -> None:
     """Wait for the server to become ready by polling the health endpoint."""
     status_code = 0
     while status_code != httpx.codes.OK:
         try:
-            status_code = httpx.get(f"http://{host}:{port}/health").status_code
+            status_code = httpx.get(
+                f"{protocol}://{host}:{port}/health", verify=host not in ("localhost", "127.0.0.1")
+            ).status_code
         except HTTPError:
             time.sleep(1)
         except Exception:  # noqa: BLE001
@@ -249,18 +275,18 @@ def wait_for_server_ready(host, port) -> None:
             time.sleep(1)
 
 
-def run_on_mac_or_linux(host, port, log_level, options, app):
+def run_on_mac_or_linux(host, port, log_level, options, app, protocol):
     webapp_process = Process(target=run_langflow, args=(host, port, log_level, options, app))
     webapp_process.start()
-    wait_for_server_ready(host, port)
+    wait_for_server_ready(host, port, protocol)
 
-    print_banner(host, port)
+    print_banner(host, port, protocol)
     return webapp_process
 
 
-def run_on_windows(host, port, log_level, options, app) -> None:
+def run_on_windows(host, port, log_level, options, app, protocol) -> None:
     """Run the Langflow server on Windows."""
-    print_banner(host, port)
+    print_banner(host, port, protocol)
     run_langflow(host, port, log_level, options, app)
 
 
@@ -292,6 +318,80 @@ def get_free_port(port):
     return port
 
 
+def is_loopback_address(host: str) -> bool:
+    """Check if a host is a loopback address (localhost, 127.0.0.1, ::1, etc.).
+
+    Args:
+        host: The host address to check
+
+    Returns:
+        bool: True if the host is a loopback address, False otherwise
+    """
+    # Check if it's exactly "localhost"
+    if host == "localhost":
+        return True
+
+    # Check if it's exactly "0.0.0.0" (which binds to all interfaces)
+    if host == "0.0.0.0":  # noqa: S104
+        return True
+
+    try:
+        # Convert string to IP address object
+        ip = ip_address(host)
+        # Check if it's a loopback address (127.0.0.0/8 for IPv4, ::1 for IPv6)
+        return bool(ip.is_loopback)
+    except ValueError:
+        # If the IP address is invalid, default to False
+        return False
+
+
+def get_best_access_host(host: str, port: int) -> str:
+    """Get the best host to use for accessing the server.
+
+    For loopback addresses, we prefer 'localhost' over IP addresses like '127.0.0.1'
+    because 'localhost' is more universally supported across different operating systems
+    and network configurations.
+
+    Args:
+        host: The original host address
+        port: The port number
+        protocol: The protocol (http or https)
+
+    Returns:
+        str: The best host address to use for access
+    """
+    if not is_loopback_address(host):
+        return host
+
+    # For loopback addresses, prefer localhost
+    preferred_host = "localhost"
+
+    # Test connectivity to both localhost and the original host if it's different
+    if host != preferred_host:
+        # Test if localhost works
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.settimeout(1)  # 1 second timeout
+                result = s.connect_ex((preferred_host, port))
+                if result == 0:
+                    return preferred_host
+        except Exception as exc:  # noqa: BLE001
+            logger.debug(f"Failed to connect to {preferred_host}:{port}: {exc}")
+
+        # If localhost doesn't work, test the original host
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.settimeout(1)  # 1 second timeout
+                result = s.connect_ex((host, port))
+                if result == 0:
+                    return host
+        except Exception as exc:  # noqa: BLE001
+            logger.debug(f"Failed to connect to {host}:{port}: {exc}")
+
+    # Default to localhost for loopback addresses
+    return preferred_host
+
+
 def get_letter_from_version(version: str) -> str | None:
     """Get the letter from a pre-release version."""
     if "a" in version:
@@ -304,10 +404,28 @@ def get_letter_from_version(version: str) -> str | None:
 
 
 def build_version_notice(current_version: str, package_name: str) -> str:
-    latest_version = fetch_latest_version(package_name, include_prerelease=langflow_is_pre_release(current_version))
-    if latest_version and pkg_version.parse(current_version) < pkg_version.parse(latest_version):
-        release_type = "pre-release" if langflow_is_pre_release(latest_version) else "version"
-        return f"A new {release_type} of {package_name} is available: {latest_version}"
+    """Build a version notice message if a newer version is available.
+
+    This function checks if there is a newer version of the package available on PyPI
+    and returns an appropriate notice message.
+
+    Args:
+        current_version (str): The currently installed version of the package
+        package_name (str): The name of the package to check
+
+    Returns:
+        str: A notice message if a newer version is available, empty string otherwise.
+            The message will indicate if the newer version is a pre-release.
+
+    Example:
+        >>> build_version_notice("1.0.0", "langflow")
+        'A new version of langflow is available: 1.1.0'
+    """
+    with suppress(httpx.ConnectError):
+        latest_version = fetch_latest_version(package_name, include_prerelease=langflow_is_pre_release(current_version))
+        if latest_version and pkg_version.parse(current_version) < pkg_version.parse(latest_version):
+            release_type = "pre-release" if langflow_is_pre_release(latest_version) else "version"
+            return f"A new {release_type} of {package_name} is available: {latest_version}"
     return ""
 
 
@@ -326,7 +444,7 @@ def stylize_text(text: str, to_style: str, *, is_prerelease: bool) -> str:
     return text.replace(to_style, styled_text)
 
 
-def print_banner(host: str, port: int) -> None:
+def print_banner(host: str, port: int, protocol: str) -> None:
     notices = []
     package_names = []  # Track package names for pip install instructions
     is_pre_release = False  # Track if any package is a pre-release
@@ -339,6 +457,7 @@ def print_banner(host: str, port: int) -> None:
     is_pre_release |= langflow_is_pre_release(langflow_version)  # Update pre-release status
 
     notice = build_version_notice(langflow_version, package_name)
+
     notice = stylize_text(notice, package_name, is_prerelease=is_pre_release)
     if notice:
         notices.append(notice)
@@ -351,25 +470,33 @@ def print_banner(host: str, port: int) -> None:
     if notices:
         notices.append(f"Run '{pip_command}' to update.")
 
-    styled_notices = [f"[bold]{notice}[/bold]" for notice in notices if notice]
+    [f"[bold]{notice}[/bold]" for notice in notices if notice]
     styled_package_name = stylize_text(
         package_name, package_name, is_prerelease=any("pre-release" in notice for notice in notices)
     )
 
-    title = f"[bold]Welcome to :chains: {styled_package_name}[/bold]\n"
+    title = f"[bold]Welcome to {styled_package_name}[/bold]\n"
     info_text = (
-        "Collaborate, and contribute at our "
-        "[bold][link=https://github.com/langflow-ai/langflow]GitHub Repo[/link][/bold] :star2:"
+        ":star2: GitHub: Star for updates → https://github.com/langflow-ai/langflow\n"
+        ":speech_balloon: Discord: Join for support → https://discord.com/invite/EqksyE2EX9"
     )
     telemetry_text = (
-        "We collect anonymous usage data to improve Langflow.\n"
-        "You can opt-out by setting [bold]DO_NOT_TRACK=true[/bold] in your environment."
+        (
+            "We collect anonymous usage data to improve Langflow.\n"
+            "To opt out, set: [bold]DO_NOT_TRACK=true[/bold] in your environment."
+        )
+        if os.getenv("DO_NOT_TRACK", os.getenv("LANGFLOW_DO_NOT_TRACK", "False")).lower() != "true"
+        else (
+            "We are [bold]not[/bold] collecting anonymous usage data to improve Langflow.\n"
+            "To contribute, set: [bold]DO_NOT_TRACK=false[/bold] in your environment."
+        )
     )
-    access_link = f"Access [link=http://{host}:{port}]http://{host}:{port}[/link]"
+    access_host = get_best_access_host(host, port)
+    access_link = f"[bold]🟢 Open Langflow →[/bold] [link={protocol}://{access_host}:{port}]{protocol}://{access_host}:{port}[/link]"
 
-    panel_content = "\n\n".join([title, *styled_notices, info_text, telemetry_text, access_link])
-    panel = Panel(panel_content, box=box.ROUNDED, border_style="blue", expand=False)
-    rprint(panel)
+    message = f"{title}\n{info_text}\n\n{telemetry_text}\n\n{access_link}"
+
+    console.print(Panel.fit(message, border_style="#7528FC", padding=(1, 2)))
 
 
 def run_langflow(host, port, log_level, options, app) -> None:
@@ -383,6 +510,8 @@ def run_langflow(host, port, log_level, options, app) -> None:
             port=port,
             log_level=log_level.lower(),
             loop="asyncio",
+            ssl_keyfile=options["keyfile"],
+            ssl_certfile=options["certfile"],
         )
     else:
         from langflow.server import LangflowApplication
@@ -423,7 +552,7 @@ def superuser(
 
     async def _create_superuser():
         await initialize_services()
-        async with async_session_getter(db_service) as session:
+        async with session_getter(db_service) as session:
             from langflow.services.auth.utils import create_super_user
 
             if await create_super_user(db=session, username=username, password=password):
@@ -436,7 +565,7 @@ def superuser(
                     typer.echo("Superuser creation failed.")
                     return
                 # Now create the first folder for the user
-                result = await create_default_folder_if_it_doesnt_exist(session, user.id)
+                result = await get_or_create_default_folder(session, user.id)
                 if result:
                     typer.echo("Default folder created successfully.")
                 else:
@@ -485,6 +614,15 @@ def copy_db() -> None:
         typer.echo("Pre-release database not found in the cache directory.")
 
 
+async def _migration(*, test: bool, fix: bool) -> None:
+    await initialize_services(fix_migration=fix)
+    db_service = get_db_service()
+    if not test:
+        await db_service.run_migrations()
+    results = await db_service.run_migrations_test()
+    display_results(results)
+
+
 @app.command()
 def migration(
     test: bool = typer.Option(default=True, help="Run migrations in test mode."),  # noqa: FBT001
@@ -499,12 +637,7 @@ def migration(
     ):
         raise typer.Abort
 
-    asyncio.run(initialize_services(fix_migration=fix))
-    db_service = get_db_service()
-    if not test:
-        db_service.run_migrations()
-    results = db_service.run_migrations_test()
-    display_results(results)
+    asyncio.run(_migration(test=test, fix=fix))
 
 
 @app.command()
@@ -529,7 +662,7 @@ def api_key(
             typer.echo("Auto login is disabled. API keys cannot be created through the CLI.")
             return None
 
-        async with async_session_scope() as session:
+        async with session_scope() as session:
             from langflow.services.database.models.user.model import User
 
             stmt = select(User).where(User.username == DEFAULT_SUPERUSER)
@@ -539,8 +672,8 @@ def api_key(
                     "Default superuser not found. This command requires a superuser and AUTO_LOGIN to be enabled."
                 )
                 return None
-            from langflow.services.database.models.api_key import ApiKey, ApiKeyCreate
             from langflow.services.database.models.api_key.crud import create_api_key, delete_api_key
+            from langflow.services.database.models.api_key.model import ApiKey, ApiKeyCreate
 
             stmt = select(ApiKey).where(ApiKey.user_id == superuser.id)
             api_key = (await session.exec(stmt)).first()
@@ -554,7 +687,8 @@ def api_key(
 
     unmasked_api_key = asyncio.run(aapi_key())
     # Create a banner to display the API key and tell the user it won't be shown again
-    api_key_banner(unmasked_api_key)
+    if unmasked_api_key:
+        api_key_banner(unmasked_api_key)
 
 
 def show_version(*, value: bool):

@@ -1,45 +1,29 @@
 import { expect, test } from "@playwright/test";
+import { awaitBootstrapTest } from "../../utils/await-bootstrap-test";
 
 test(
   "user should be able to use duckduckgo search component",
   { tag: ["@release", "@components"] },
   async ({ page }) => {
-    await page.goto("/");
-    await page.waitForSelector('[data-testid="mainpage_title"]', {
-      timeout: 30000,
-    });
-
-    await page.waitForSelector('[id="new-project-btn"]', {
-      timeout: 30000,
-    });
-
-    let modalCount = 0;
-    try {
-      const modalTitleElement = await page?.getByTestId("modal-title");
-      if (modalTitleElement) {
-        modalCount = await modalTitleElement.count();
-      }
-    } catch (error) {
-      modalCount = 0;
-    }
-
-    while (modalCount === 0) {
-      await page.getByText("New Flow", { exact: true }).click();
-      await page.waitForTimeout(3000);
-      modalCount = await page.getByTestId("modal-title")?.count();
-    }
+    await awaitBootstrapTest(page);
 
     await page.getByTestId("blank-flow").click();
     await page.getByTestId("sidebar-search-input").click();
     await page.getByTestId("sidebar-search-input").fill("duck");
 
-    await page.waitForTimeout(1000);
+    await page.waitForSelector('[data-testid="searchDuckDuckGo Search"]', {
+      timeout: 3000,
+    });
 
     await page
-      .locator('//*[@id="toolsDuckDuckGo Search"]')
-      .dragTo(page.locator('//*[@id="react-flow-id"]'));
-    await page.mouse.up();
-    await page.mouse.down();
+      .getByTestId("searchDuckDuckGo Search")
+      .hover()
+      .then(async () => {
+        await page
+          .getByTestId("add-component-button-duckduckgo-search")
+          .click();
+      });
+
     await page.getByTestId("fit_view").click();
 
     await page
@@ -47,8 +31,6 @@ test(
       .fill("what is langflow?");
 
     await page.getByTestId("button_run_duckduckgo search").click();
-
-    await page.getByTestId("fit_view").click();
 
     const result = await Promise.race([
       page.waitForSelector("text=built successfully", { timeout: 30000 }),
@@ -61,9 +43,10 @@ test(
           "built successfully",
         ) ?? false;
 
-      await page.waitForTimeout(500);
-      await page.getByTestId("output-inspection-data").first().click();
-      await page.waitForTimeout(1000);
+      await page
+        .getByTestId("output-inspection-dataframe-duckduckgosearchcomponent")
+        .first()
+        .click();
 
       if (isBuiltSuccessfully) {
         await page.getByRole("gridcell").first().click();

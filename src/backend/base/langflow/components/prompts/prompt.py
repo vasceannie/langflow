@@ -1,7 +1,7 @@
 from langflow.base.prompts.api_utils import process_prompt_template
-from langflow.custom import Component
+from langflow.custom.custom_component.component import Component
 from langflow.inputs.inputs import DefaultPromptField
-from langflow.io import Output, PromptInput
+from langflow.io import MessageTextInput, Output, PromptInput
 from langflow.schema.message import Message
 from langflow.template.utils import update_template_values
 
@@ -9,16 +9,23 @@ from langflow.template.utils import update_template_values
 class PromptComponent(Component):
     display_name: str = "Prompt"
     description: str = "Create a prompt template with dynamic variables."
-    icon = "prompts"
+    icon = "braces"
     trace_type = "prompt"
     name = "Prompt"
 
     inputs = [
         PromptInput(name="template", display_name="Template"),
+        MessageTextInput(
+            name="tool_placeholder",
+            display_name="Tool Placeholder",
+            tool_mode=True,
+            advanced=True,
+            info="A placeholder input for tool mode.",
+        ),
     ]
 
     outputs = [
-        Output(display_name="Prompt Message", name="prompt", method="build_prompt"),
+        Output(display_name="Prompt", name="prompt", method="build_prompt"),
     ]
 
     async def build_prompt(self) -> Message:
@@ -38,9 +45,9 @@ class PromptComponent(Component):
         )
         return frontend_node
 
-    def post_code_processing(self, new_frontend_node: dict, current_frontend_node: dict):
+    async def update_frontend_node(self, new_frontend_node: dict, current_frontend_node: dict):
         """This function is called after the code validation is done."""
-        frontend_node = super().post_code_processing(new_frontend_node, current_frontend_node)
+        frontend_node = await super().update_frontend_node(new_frontend_node, current_frontend_node)
         template = frontend_node["template"]["template"]["value"]
         # Kept it duplicated for backwards compatibility
         _ = process_prompt_template(

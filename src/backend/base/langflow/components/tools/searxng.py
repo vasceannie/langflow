@@ -9,7 +9,7 @@ from loguru import logger
 from pydantic.v1 import Field, create_model
 
 from langflow.base.langchain_utilities.model import LCToolComponent
-from langflow.inputs import DropdownInput, IntInput, MessageTextInput, MultiselectInput
+from langflow.inputs.inputs import DropdownInput, IntInput, MessageTextInput, MultiselectInput
 from langflow.io import Output
 from langflow.schema.dotdict import dotdict
 
@@ -121,10 +121,10 @@ class SearXNGToolComponent(LCToolComponent):
         SearxSearch._headers = self.search_headers.copy()
         SearxSearch._max_results = self.max_results
 
-        _globals = globals()
-        _local = {}
-        _local["SearxSearch"] = SearxSearch
-        _globals.update(_local)
+        globals_ = globals()
+        local = {}
+        local["SearxSearch"] = SearxSearch
+        globals_.update(local)
 
         schema_fields = {
             "query": (str, Field(..., description="The query to search for.")),
@@ -137,7 +137,7 @@ class SearXNGToolComponent(LCToolComponent):
         searx_search_schema = create_model("SearxSearchSchema", **schema_fields)
 
         return StructuredTool.from_function(
-            func=_local["SearxSearch"].search,
+            func=local["SearxSearch"].search,
             args_schema=searx_search_schema,
             name="searxng_search_tool",
             description="A tool that searches for tools using SearXNG.\nThe available categories are: "

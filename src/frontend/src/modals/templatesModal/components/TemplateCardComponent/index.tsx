@@ -25,6 +25,7 @@ export default function TemplateCardComponent({
 
   return (
     <div
+      data-testid={`template-${convertTestName(example.name)}`}
       className="group flex cursor-pointer gap-3 overflow-hidden rounded-md p-3 hover:bg-muted focus-visible:bg-muted"
       tabIndex={0}
       onKeyDown={handleKeyDown}
@@ -42,7 +43,10 @@ export default function TemplateCardComponent({
         />
       </div>
       <div className="flex flex-1 flex-col justify-between">
-        <div>
+        <div
+          data-testid="text_card_container"
+          role={convertTestName(example.name)}
+        >
           <div className="flex w-full items-center">
             <h3
               className="line-clamp-3 font-semibold"

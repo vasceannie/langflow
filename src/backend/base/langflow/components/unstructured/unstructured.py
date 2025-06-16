@@ -1,15 +1,14 @@
 from langchain_unstructured import UnstructuredLoader
 
-from langflow.base.data import BaseFileComponent
-from langflow.inputs import DropdownInput, MessageTextInput, NestedDictInput, SecretStrInput
-from langflow.schema import Data
+from langflow.base.data.base_file import BaseFileComponent
+from langflow.inputs.inputs import DropdownInput, MessageTextInput, NestedDictInput, SecretStrInput
+from langflow.schema.data import Data
 
 
 class UnstructuredComponent(BaseFileComponent):
     display_name = "Unstructured API"
     description = (
-        "Uses Unstructured.io API to extract clean text from raw source documents. "
-        "Supports a wide range of file types."
+        "Uses Unstructured.io API to extract clean text from raw source documents. Supports a wide range of file types."
     )
     documentation = (
         "https://python.langchain.com/api_reference/unstructured/document_loaders/"

@@ -7,7 +7,9 @@ from .clickhouse import ClickhouseVectorStoreComponent
 from .couchbase import CouchbaseVectorStoreComponent
 from .elasticsearch import ElasticsearchVectorStoreComponent
 from .faiss import FaissVectorStoreComponent
+from .graph_rag import GraphRAGComponent
 from .hcd import HCDVectorStoreComponent
+from .local_db import LocalDBComponent
 from .milvus import MilvusVectorStoreComponent
 from .mongodb_atlas import MongoVectorStoreComponent
 from .opensearch import OpenSearchVectorStoreComponent
@@ -19,7 +21,6 @@ from .supabase import SupabaseVectorStoreComponent
 from .upstash import UpstashVectorStoreComponent
 from .vectara import VectaraVectorStoreComponent
 from .vectara_rag import VectaraRagComponent
-from .vectara_self_query import VectaraSelfQueryRetriverComponent
 from .weaviate import WeaviateVectorStoreComponent
 
 __all__ = [
@@ -32,7 +33,9 @@ __all__ = [
     "CouchbaseVectorStoreComponent",
     "ElasticsearchVectorStoreComponent",
     "FaissVectorStoreComponent",
+    "GraphRAGComponent",
     "HCDVectorStoreComponent",
+    "LocalDBComponent",
     "MilvusVectorStoreComponent",
     "MongoVectorStoreComponent",
     "OpenSearchVectorStoreComponent",
@@ -43,7 +46,6 @@ __all__ = [
     "SupabaseVectorStoreComponent",
     "UpstashVectorStoreComponent",
     "VectaraRagComponent",
-    "VectaraSelfQueryRetriverComponent",
     "VectaraVectorStoreComponent",
     "WeaviateVectorStoreComponent",
 ]

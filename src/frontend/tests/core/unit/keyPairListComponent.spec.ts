@@ -1,35 +1,13 @@
 import { expect, test } from "@playwright/test";
+import { adjustScreenView } from "../../utils/adjust-screen-view";
+import { awaitBootstrapTest } from "../../utils/await-bootstrap-test";
 
 test(
   "KeypairListComponent",
   { tag: ["@release", "@workspace"] },
   async ({ page }) => {
-    await page.goto("/");
-    await page.waitForSelector('[data-testid="mainpage_title"]', {
-      timeout: 30000,
-    });
+    await awaitBootstrapTest(page);
 
-    await page.waitForSelector('[id="new-project-btn"]', {
-      timeout: 30000,
-    });
-
-    let modalCount = 0;
-    try {
-      const modalTitleElement = await page?.getByTestId("modal-title");
-      if (modalTitleElement) {
-        modalCount = await modalTitleElement.count();
-      }
-    } catch (error) {
-      modalCount = 0;
-    }
-
-    while (modalCount === 0) {
-      await page.getByText("New Flow", { exact: true }).click();
-      await page.waitForSelector('[data-testid="modal-title"]', {
-        timeout: 3000,
-      });
-      modalCount = await page.getByTestId("modal-title")?.count();
-    }
     await page.waitForSelector('[data-testid="blank-flow"]', {
       timeout: 30000,
     });
@@ -37,22 +15,19 @@ test(
     await page.getByTestId("sidebar-search-input").click();
     await page.getByTestId("sidebar-search-input").fill("amazon bedrock");
 
-    await page.waitForSelector('[data-testid="modelsAmazon Bedrock"]', {
+    await page.waitForSelector('[data-testid="amazonAmazon Bedrock"]', {
       timeout: 3000,
     });
 
     await page
-      .getByTestId("modelsAmazon Bedrock")
+      .getByTestId("amazonAmazon Bedrock")
       .dragTo(page.locator('//*[@id="react-flow-id"]'));
-    await page.mouse.up();
-    await page.mouse.down();
-    await page.getByTestId("fit_view").click();
-    await page.getByTestId("zoom_out").click();
-    await page.getByTestId("zoom_out").click();
-    await page.getByTestId("zoom_out").click();
 
-    await page.getByTestId("more-options-modal").click();
-    await page.getByTestId("advanced-button-modal").click();
+    await adjustScreenView(page);
+
+    await page.getByTestId("div-generic-node").click();
+
+    await page.getByTestId("edit-button-modal").last().click();
 
     await page.getByTestId("showmodel_kwargs").click();
     expect(await page.getByTestId("showmodel_kwargs").isChecked()).toBeTruthy();
@@ -94,8 +69,7 @@ test(
       expect(false).toBeTruthy();
     }
 
-    await page.getByTestId("more-options-modal").click();
-    await page.getByTestId("advanced-button-modal").click();
+    await page.getByTestId("edit-button-modal").last().click();
 
     await page.getByText("Close").last().click();
 
@@ -105,8 +79,7 @@ test(
       expect(true).toBeTruthy();
       await page.getByTestId("div-generic-node").click();
 
-      await page.getByTestId("more-options-modal").click();
-      await page.getByTestId("advanced-button-modal").click();
+      await page.getByTestId("edit-button-modal").last().click();
 
       await page.locator('//*[@id="editNodekeypair0"]').click();
       await page

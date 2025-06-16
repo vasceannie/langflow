@@ -10,8 +10,8 @@ from pydantic import BaseModel, Field
 
 from langflow.base.langchain_utilities.model import LCToolComponent
 from langflow.field_typing import Tool
-from langflow.inputs import DropdownInput, IntInput, MessageTextInput
-from langflow.schema import Data
+from langflow.inputs.inputs import DropdownInput, IntInput, MessageTextInput
+from langflow.schema.data import Data
 
 
 class YahooFinanceMethod(Enum):
@@ -49,11 +49,12 @@ class YahooFinanceSchema(BaseModel):
 
 
 class YfinanceToolComponent(LCToolComponent):
-    display_name = "Yahoo Finance"
+    display_name = "Yahoo Finance [DEPRECATED]"
     description = """Uses [yfinance](https://pypi.org/project/yfinance/) (unofficial package) \
 to access financial data and market information from Yahoo Finance."""
     icon = "trending-up"
     name = "YahooFinanceTool"
+    legacy = True
 
     inputs = [
         MessageTextInput(

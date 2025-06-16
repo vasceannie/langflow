@@ -5,6 +5,8 @@ const lightCodeTheme = require("prism-react-renderer/themes/github");
 const darkCodeTheme = require("prism-react-renderer/themes/dracula");
 const { remarkCodeHike } = require("@code-hike/mdx");
 
+const isProduction = process.env.NODE_ENV === "production";
+
 /** @type {import('@docusaurus/types').Config} */
 const config = {
   title: "Langflow Documentation",
@@ -12,20 +14,68 @@ const config = {
     "Langflow is a low-code app builder for RAG and multi-agent AI applications.",
   favicon: "img/favicon.ico",
   url: "https://docs.langflow.org",
-  baseUrl: "/",
+  baseUrl: process.env.BASE_URL ? process.env.BASE_URL : "/",
   onBrokenLinks: "throw",
   onBrokenMarkdownLinks: "warn",
+  onBrokenAnchors: "warn",
   organizationName: "langflow-ai",
   projectName: "langflow",
   trailingSlash: false,
   staticDirectories: ["static"],
-  customFields: {
-    mendableAnonKey: "b7f52734-297c-41dc-8737-edbd13196394", // Mendable Anon Client-side key, safe to expose to the public
-  },
   i18n: {
     defaultLocale: "en",
     locales: ["en"],
   },
+  headTags: [
+    {
+      tagName: "link",
+      attributes: {
+        rel: "stylesheet",
+        href: "https://fonts.googleapis.com/css2?family=Sora:wght@550;600&display=swap",
+      },
+    },
+    ...(isProduction
+      ? [
+          // Ketch consent management script
+          {
+            tagName: "script",
+            attributes: {},
+            innerHTML: `!function(){window.semaphore=window.semaphore||[],window.ketch=function(){window.semaphore.push(arguments)};var e=document.createElement("script");e.type="text/javascript",e.src="https://global.ketchcdn.com/web/v3/config/datastax/langflow_org_web/boot.js",e.defer=e.async=!0,document.getElementsByTagName("head")[0].appendChild(e)}();`,
+          },
+          // Ketch jurisdiction dynamic link and GA4 consent tracking
+          {
+            tagName: "script",
+            attributes: {
+              defer: "true",
+            },
+            innerHTML: `
+          ;(function () {
+            const onKetchConsentGtagTrack = (consent) => {
+              if (window.gtag &&
+                  consent.purposes &&
+                  'analytics' in consent.purposes &&
+                  'targeted_advertising' in consent.purposes
+              ) {
+                const analyticsString = consent.purposes.analytics === true ? 'granted' : 'denied'
+                const targetedAdsString = consent.purposes.targeted_advertising === true ? 'granted' : 'denied'
+                const gtagObject = {
+                  analytics_storage: analyticsString,
+                  ad_personalization: targetedAdsString,
+                  ad_storage: targetedAdsString,
+                  ad_user_data: targetedAdsString,
+                }
+                window.gtag('consent', 'update', gtagObject)
+              }
+            }
+            if (window.ketch) {
+              window.ketch('on', 'consent', onKetchConsentGtagTrack)
+            }
+          })()
+        `,
+          },
+        ]
+      : []),
+  ],
 
   presets: [
     [
@@ -39,7 +89,7 @@ const config = {
         docs: {
           routeBasePath: "/", // Serve the docs at the site's root
           sidebarPath: require.resolve("./sidebars.js"), // Use sidebars.js file
-          sidebarCollapsed: false,
+          sidebarCollapsed: true,
           beforeDefaultRemarkPlugins: [
             [
               remarkCodeHike,
@@ -57,13 +107,10 @@ const config = {
           lastmod: "datetime",
           changefreq: null,
           priority: null,
+          ignorePatterns: ["/preferences"],
         },
         gtag: {
-          trackingID: "G-XHC7G628ZP",
-          anonymizeIP: true,
-        },
-        googleTagManager: {
-          containerId: "GTM-NK5M4ZT8",
+          trackingID: "G-SLQFLQ3KPT",
         },
         blog: false,
         theme: {
@@ -92,7 +139,8 @@ const config = {
             from: [
               "/whats-new-a-new-chapter-langflow",
               "/👋 Welcome-to-Langflow",
-              "/getting-started-welcome-to-langflow"
+              "/getting-started-welcome-to-langflow",
+              "/guides-new-to-llms",
             ],
           },
           {
@@ -107,12 +155,9 @@ const config = {
             from: "/getting-started-quickstart",
           },
           {
-            to: "/starter-projects-travel-planning-agent",
-            from: "/starter-projects-dynamic-agent/",
-          },
-          {
-            to: "/workspace-overview",
+            to: "concepts-overview",
             from: [
+              "/workspace-overview",
               "/365085a8-a90a-43f9-a779-f8769ec7eca1",
               "/My-Collection",
               "/workspace",
@@ -120,12 +165,108 @@ const config = {
             ],
           },
           {
-            to: "/components-overview",
-            from: "/components",
+            to: "/concepts-components",
+            from: ["/components", "/components-overview"],
           },
           {
             to: "/configuration-global-variables",
             from: "/settings-global-variables",
+          },
+          {
+            to: "/concepts-playground",
+            from: [
+              "/workspace-playground",
+              "/workspace-logs",
+              "/guides-chat-memory",
+            ],
+          },
+          {
+            to: "/concepts-objects",
+            from: ["/guides-data-message", "/configuration-objects"],
+          },
+          {
+            to: "/blog-writer",
+            from: ["/starter-projects-blog-writer", "/tutorials-blog-writer"],
+          },
+          {
+            to: "/memory-chatbot",
+            from: [
+              "/starter-projects-memory-chatbot",
+              "/tutorials-memory-chatbot",
+            ],
+          },
+          {
+            to: "/document-qa",
+            from: ["/starter-projects-document-qa", "/tutorials-document-qa"],
+          },
+          {
+            to: "/starter-projects-simple-agent",
+            from: [
+              "/math-agent",
+              "/starter-projects-math-agent",
+              "/tutorials-math-agent",
+            ],
+          },
+          {
+            to: "/sequential-agent",
+            from: [
+              "/starter-projects-sequential-agent",
+              "/tutorials-sequential-agent",
+            ],
+          },
+          {
+            to: "/travel-planning-agent",
+            from: [
+              "/starter-projects-travel-planning-agent",
+              "/tutorials-travel-planning-agent",
+              "/starter-projects-dynamic-agent/",
+            ],
+          },
+          {
+            to: "/components-vector-stores",
+            from: "/components-rag",
+          },
+          {
+            to: "/configuration-authentication",
+            from: [
+              "/configuration-security-best-practices",
+              "/Configuration/configuration-security-best-practices",
+            ],
+          },
+          {
+            to: "/environment-variables",
+            from: [
+              "/configuration-auto-saving",
+              "/Configuration/configuration-auto-saving",
+              "/configuration-backend-only",
+              "/Configuration/configuration-backend-only",
+            ],
+          },
+          {
+            to: "/concepts-publish",
+            from: ["/concepts-api", "/workspace-api"],
+          },
+          {
+            to: "/components-custom-components",
+            from: "/components/custom",
+          },
+          {
+            to: "/components-bundle-components",
+            from: "/components-loaders",
+          },
+          {
+            to: "/mcp-server",
+            from: "/integrations-mcp",
+          },
+          {
+            to: "/integrations-nvidia-g-assist",
+            from: "/integrations-nvidia-system-assist",
+          },
+          {
+            to: "/deployment-kubernetes-dev",
+            from: [
+              "/deployment-kubernetes",
+            ],
           },
           // add more redirects like this
           // {
@@ -155,8 +296,8 @@ const config = {
         hideOnScroll: true,
         logo: {
           alt: "Langflow",
-          src: "img/langflow-logo-black.svg",
-          srcDark: "img/langflow-logo-white.svg",
+          src: "img/lf-docs-light.svg",
+          srcDark: "img/lf-docs-dark.svg",
         },
         items: [
           // right
@@ -203,8 +344,39 @@ const config = {
       },
       docs: {
         sidebar: {
-          hideable: true,
+          hideable: false,
         },
+      },
+      footer: {
+        logo: {
+          alt: "Langflow",
+          src: "img/lf-docs-light.svg",
+          srcDark: "img/lf-docs-dark.svg",
+          width: 160,
+          height: 40,
+        },
+        links: [
+          {
+            title: null,
+            items: [
+              {
+                html: `<div class="footer-links">
+                  <span>© ${new Date().getFullYear()} Langflow</span>
+                  <span id="preferenceCenterContainer"> ·&nbsp; <a href="https://langflow.org/preferences">Manage Privacy Choices</a></span>
+                  </div>`,
+              },
+            ],
+          },
+        ],
+      },
+      algolia: {
+        appId: "UZK6BDPCVY",
+        // public key, safe to commit
+        apiKey: "adbd7686dceb1cd510d5ce20d04bf74c",
+        indexName: "langflow",
+        contextualSearch: true,
+        searchParameters: {},
+        searchPagePath: "search",
       },
     }),
 };

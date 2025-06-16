@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import * as dotenv from "dotenv";
 import path from "path";
+import { awaitBootstrapTest } from "../../utils/await-bootstrap-test";
 
 test(
   "should able to see and interact with logs",
@@ -16,45 +17,18 @@ test(
       dotenv.config({ path: path.resolve(__dirname, "../../.env") });
     }
 
-    await page.goto("/");
-    await page.waitForSelector('[data-testid="mainpage_title"]', {
-      timeout: 30000,
-    });
-
-    await page.waitForSelector('[id="new-project-btn"]', {
-      timeout: 30000,
-    });
-
-    let modalCount = 0;
-    try {
-      const modalTitleElement = await page?.getByTestId("modal-title");
-      if (modalTitleElement) {
-        modalCount = await modalTitleElement.count();
-      }
-    } catch (error) {
-      modalCount = 0;
-    }
-
-    while (modalCount === 0) {
-      await page.getByText("New Flow", { exact: true }).click();
-      await page.waitForSelector('[data-testid="modal-title"]', {
-        timeout: 3000,
-      });
-      modalCount = await page.getByTestId("modal-title")?.count();
-    }
+    await awaitBootstrapTest(page);
 
     await page.getByTestId("side_nav_options_all-templates").click();
     await page.getByRole("heading", { name: "Basic Prompting" }).click();
     await expect(page.getByTestId(/.*rf__node.*/).first()).toBeVisible({
-      timeout: 1000,
+      timeout: 3000,
     });
-    let outdatedComponents = await page
-      .getByTestId("icon-AlertTriangle")
-      .count();
+    let outdatedComponents = await page.getByTestId("update-button").count();
 
     while (outdatedComponents > 0) {
-      await page.getByTestId("icon-AlertTriangle").first().click();
-      outdatedComponents = await page.getByTestId("icon-AlertTriangle").count();
+      await page.getByTestId("update-button").first().click();
+      outdatedComponents = await page.getByTestId("update-button").count();
     }
 
     let filledApiKey = await page.getByTestId("remove-icon-badge").count();
@@ -63,7 +37,6 @@ test(
       filledApiKey = await page.getByTestId("remove-icon-badge").count();
     }
 
-    await page.getByTestId("icon-ChevronDown").click();
     await page.getByText("Logs").click();
     await page.getByText("No Data Available", { exact: true }).isVisible();
     await page.keyboard.press("Escape");
@@ -85,14 +58,6 @@ test(
 
     await page.waitForSelector("text=built successfully", { timeout: 30000 });
 
-    await page.getByText("built successfully").last().click({
-      timeout: 15000,
-    });
-
-    await page
-      .getByText("Chat Output built successfully", { exact: true })
-      .isVisible();
-    await page.getByTestId("icon-ChevronDown").click();
     await page.getByText("Logs").click();
 
     await page.getByText("timestamp").first().isVisible();

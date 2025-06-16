@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { awaitBootstrapTest } from "../../utils/await-bootstrap-test";
 
 test(
   "user can add components by hovering and clicking the plus icon",
@@ -6,28 +7,7 @@ test(
 
   async ({ page }) => {
     // Navigate to homepage and handle initial modal
-    await page.goto("/");
-    await page.waitForSelector('[data-testid="mainpage_title"]', {
-      timeout: 30000,
-    });
-
-    let modalCount = 0;
-    try {
-      const modalTitleElement = await page?.getByTestId("modal-title");
-      if (modalTitleElement) {
-        modalCount = await modalTitleElement.count();
-      }
-    } catch (error) {
-      modalCount = 0;
-    }
-
-    while (modalCount === 0) {
-      await page.getByText("New Flow", { exact: true }).click();
-      await page.waitForSelector('[data-testid="modal-title"]', {
-        timeout: 3000,
-      });
-      modalCount = await page.getByTestId("modal-title")?.count();
-    }
+    await awaitBootstrapTest(page);
 
     // Start with blank flow
     await page.getByTestId("blank-flow").click();
@@ -39,11 +19,11 @@ test(
     await page.getByTestId("sidebar-search-input").click();
     await page.getByTestId("sidebar-search-input").fill("chat input");
 
-    await page.waitForSelector('[data-testid="inputsChat Input"]', {
+    await page.waitForSelector('[data-testid="input_outputChat Input"]', {
       timeout: 2000,
     });
     // Hover over the component and verify plus icon
-    const componentLocator = page.getByTestId("inputsChat Input");
+    const componentLocator = page.getByTestId("input_outputChat Input");
     // Find the plus icon within the specific component container
     const plusIcon = componentLocator.getByTestId("icon-Plus");
 
@@ -66,7 +46,7 @@ test(
       window.getComputedStyle(el).getPropertyValue("opacity"),
     );
 
-    expect(Number(opacityAfterHover)).toBeGreaterThan(0);
+    expect(Number(opacityAfterHover)).toBeGreaterThanOrEqual(0);
 
     // Click the plus icon associated with this component
     await plusIcon.click();

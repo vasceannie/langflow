@@ -1,10 +1,10 @@
 import assemblyai as aai
 from loguru import logger
 
-from langflow.custom import Component
+from langflow.custom.custom_component.component import Component
 from langflow.field_typing.range_spec import RangeSpec
 from langflow.io import DataInput, FloatInput, Output, SecretStrInput
-from langflow.schema import Data
+from langflow.schema.data import Data
 
 
 class AssemblyAITranscriptionJobPoller(Component):
@@ -18,11 +18,13 @@ class AssemblyAITranscriptionJobPoller(Component):
             name="api_key",
             display_name="Assembly API Key",
             info="Your AssemblyAI API key. You can get one from https://www.assemblyai.com/",
+            required=True,
         ),
         DataInput(
             name="transcript_id",
             display_name="Transcript ID",
             info="The ID of the transcription job to poll",
+            required=True,
         ),
         FloatInput(
             name="polling_interval",
